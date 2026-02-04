@@ -1,40 +1,29 @@
-import logging
+import pandas as pd
+from datetime import datetime
 import os
-import sys
 
-def setup_logging(name: str = "AirlineApp", log_file: str = "app.log") -> logging.Logger:
+def log_prediction(input_data: pd.DataFrame, prediction: pd.Series, filepath: str = "logs/predictions.csv"):
     """
-    Configura y retorna un logger estandarizado para la aplicación.
+    Guarda inputs y predicciones del Airlines Dataset con timestamp en CSV.
 
     Args:
-        name (str): Nombre del logger.
-        log_file (str): Ruta al archivo de log.
-
-    Returns:
-        logging.Logger: Instancia de logger configurada.
+        input_data (pd.DataFrame): Datos de entrada
+        prediction (pd.Series): Predicciones del modelo
+        filepath (str): Ruta del archivo de logs
     """
-    # Crear directorio de logs si no existe
-    log_dir = os.path.dirname(log_file)
-    if log_dir and not os.path.exists(log_dir):
-        os.makedirs(log_dir)
-
-    formatter = logging.Formatter(
-        '%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-        datefmt='%Y-%m-%d %H:%M:%S'
-    )
-
-    handler_file = logging.FileHandler(log_file)
-    handler_file.setFormatter(formatter)
-
-    handler_console = logging.StreamHandler(sys.stdout)
-    handler_console.setFormatter(formatter)
-
-    logger = logging.getLogger(name)
-    logger.setLevel(logging.INFO)
-    
-    # Evitar duplicar handlers si la función se llama varias veces
-    if not logger.handlers:
-        logger.addHandler(handler_file)
-        logger.addHandler(handler_console)
-
-    return logger
+    try:
+        # Asegurar que el directorio existe
+        os.makedirs(os.path.dirname(filepath), exist_ok=True)
+        
+        # Crear dataframe de log
+        log_entry = input_data.copy()
+        log_entry['prediction'] = prediction.values if isinstance(prediction, pd.Series) else prediction
+        log_entry['timestamp'] = datetime.now()
+        
+        # Guardar (append si existe)
+        write_header = not os.path.exists(filepath)
+        log_entry.to_csv(filepath, mode='a', header=write_header, index=False)
+        print(f"Predicción registrada en {filepath}")
+        
+    except Exception as e:
+        print(f"Error al registrar log: {e}")

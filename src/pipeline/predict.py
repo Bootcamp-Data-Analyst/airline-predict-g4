@@ -1,33 +1,20 @@
+from typing import Any
 import pandas as pd
-from typing import Any, List, Dict, Union
 
-def make_prediction(model: Any, data: pd.DataFrame) -> Union[List[int], Any]:
+def predict(model: Any, X: pd.DataFrame) -> pd.Series:
     """
-    Realiza predicciones usando el modelo entrenado.
+    Genera predicciones usando el modelo entrenado.
 
     Args:
-        model (Any): Modelo (scikit-learn, etc).
-        data (pd.DataFrame): Datos preprocesados (misma estructura que X_train).
+        model (Any): Modelo entrenado
+        X (pd.DataFrame): Datos de entrada
 
     Returns:
-        List[int]: Predicciones de clase.
+        pd.Series: Predicciones
     """
     try:
-        # TODO: Ejecutar predicción
-        # preds = model.predict(data)
-        # return preds
-        return []
+        predictions = model.predict(X)
+        return pd.Series(predictions)
     except Exception as e:
-        print(f"Error en inferencia: {e}")
-        return []
-
-def get_prediction_probabilities(model: Any, data: pd.DataFrame) -> List[float]:
-    """
-    Obtiene las probabilidades de las predicciones si el modelo lo soporta.
-    """
-    try:
-        # TODO: Obtener probas
-        # probs = model.predict_proba(data)
-        return []
-    except Exception:
-        return []
+        print(f"Error en la predicción: {e}")
+        return pd.Series()

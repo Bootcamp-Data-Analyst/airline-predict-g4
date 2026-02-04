@@ -1,53 +1,24 @@
-import joblib
 from typing import Any
+import joblib
 import os
 
-def load_trained_model(model_path: str) -> Any:
+def load_model(path: str) -> Any:
     """
-    Carga el modelo entrenado desde disco.
+    Carga un modelo serializado desde disco.
 
     Args:
-        model_path (str): Ruta absoluta o relativa al archivo del modelo (.pkl/.joblib).
+        path (str): Ruta del archivo del modelo
 
     Returns:
-        Any: El objeto del modelo cargado (ej. sklearn estimator).
-
-    Raises:
-        FileNotFoundError: Si el archivo especificado no existe.
+        Any: Modelo cargado
     """
     try:
-        # Verificación preliminar de existencia
-        if not os.path.exists(model_path):
-            raise FileNotFoundError(f"No se encontró el archivo del modelo en: {model_path}")
-
-        print(f"Cargando modelo desde: {model_path}")
-        
-        # TODO: Cargar el modelo usando joblib
-        # model = joblib.load(model_path)
-        # return model
-        
-        return None # Placeholder
-
+        if not os.path.exists(path):
+            raise FileNotFoundError(f"El modelo no existe en la ruta: {path}")
+            
+        model = joblib.load(path)
+        print(f"Modelo cargado exitosamente desde {path}")
+        return model
     except Exception as e:
-        print(f"Error al cargar el modelo: {e}")
+        print(f"Error cargando el modelo: {e}")
         return None
-
-def save_model(model: Any, save_path: str) -> bool:
-    """
-    Guarda el modelo entrenado en disco.
-
-    Args:
-        model (Any): Objeto del modelo a guardar.
-        save_path (str): Ruta donde se guardará el archivo.
-    
-    Returns:
-        bool: True si se guardó exitosamente, False en caso contrario.
-    """
-    try:
-        # TODO: Implementar lógica de guardado
-        # joblib.dump(model, save_path)
-        print(f"Modelo guardado en: {save_path}")
-        return True
-    except Exception as e:
-        print(f"Error al guardar el modelo: {e}")
-        return False

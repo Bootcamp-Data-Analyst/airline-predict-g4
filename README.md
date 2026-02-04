@@ -1,59 +1,61 @@
-# Airline Customer Satisfaction Prediction (Group 4)
+# airline-predict-g4
 
-Este proyecto tiene como objetivo desarrollar un modelo de Machine Learning para predecir la satisfacción de pasajeros de línea aérea utilizando el "Airlines Dataset".
+**Proyecto de Clasificación de Satisfacción de Clientes de Aerolíneas**
 
-## 👥 Equipo (Grupo 4)
+Este proyecto implementa un pipeline de Machine Learning completo para predecir si un cliente está satisfecho o no, basándose en el **Airlines Dataset**.
 
-| Miembro | Rol / Feature |
-|---------|---------------|
-| **Rocio L** | EDA & Model Training (`feature-eda-model`) |
-| **Thami** | Pipeline de Datos (`feature-pipeline`) |
-| **Rocio P** | Aplicación Web (`feature-app`) |
-| **Mariana** | Despliegue & Docker (`feature-deployment`) |
+## 🚀 Tecnologías usadas
+- **Python**: Lenguaje principal.
+- **Scikit-learn**: Modelado y preprocesamiento.
+- **Pandas**: Manipulación de datos.
+- **Streamlit**: Interfaz de usuario web.
+- **Docker**: Contenerización para despliegue reproducible.
 
-## 🚀 Estructura del Proyecto
+## 📂 Estructura del proyecto
 
-```
+```bash
 airline-predict-g4/
-├── data/               # Datasets raw y processed
-├── notebooks/          # Jupyter notebooks para EDA
-├── src/                # Código fuente
+├── data/               # Datasets (raw/processed)
+├── notebooks/          # Análisis Exploratorio (EDA)
+├── src/
 │   ├── models/         # Entrenamiento y carga de modelos
-│   ├── pipeline/       # Preprocesamiento y predicción
-│   └── app/            # Aplicación Streamlit
-├── docker/             # Configuración Docker
-├── tests/              # Tests unitarios
-└── requirements.txt    # Dependencias
+│   ├── pipeline/       # Scripts de preprocesamiento, predicción y logging
+│   └── app/            # Aplicación Frontend (Streamlit)
+├── docker/             # Configuración de Docker
+├── tests/              # Pruebas unitarias
+└── README.md           # Documentación principal
 ```
 
-## 🛠️ Instalación y Uso
+## 👥 Roles y Flujo de Trabajo
 
-1. **Clonar el repositorio:**
+El desarrollo se realiza siguiendo **Gitflow**:
+
+| Feature Branch | Responsable | Descripción |
+|----------------|-------------|-------------|
+| `feature-eda-model` | **Rocio L** | EDA, selección y entrenamiento del modelo. |
+| `feature-pipeline` | **Thami** | Pipeline de transformación de datos y scripts de predicción. |
+| `feature-app` | **Rocio P** | Desarrollo de la aplicación visual en Streamlit. |
+| `feature-deployment` | **Mariana** | Configuración de Docker y proceso de despliegue. |
+
+**Flujo:**
+1. Crear rama `feature-x` desde `develop`.
+2. Implementar cambios.
+3. Pull Request hacia `develop`.
+
+## 🛠️ Ejecución con Docker
+
+El proyecto incluye un `Dockerfile` listo para ejecutar la aplicación Streamlit.
+
+1. **Construir la imagen:**
    ```bash
-   git clone https://github.com/Bootcamp-Data-Analyst/airline-predict-g4.git
-   cd airline-predict-g4
+   docker-compose build
    ```
 
-2. **Crear entorno virtual e instalar dependencias:**
+2. **Ejecutar el contenedor:**
    ```bash
-   python -m venv venv
-   source venv/bin/activate  # Windows: venv\Scripts\activate
-   pip install -r requirements.txt
+   docker-compose up
    ```
+   La aplicación estará disponible en `http://localhost:8501`.
 
-3. **Ejecutar la App localmente:**
-   ```bash
-   streamlit run src/app/app.py
-   ```
-
-4. **Ejecutar con Docker:**
-   ```bash
-   cd docker
-   docker-compose up --build
-   ```
-
-## 📊 Dataset
-El dataset contiene información sobre clientes de una aerolínea, incluyendo detalles de su vuelo y puntuaciones de satisfacción sobre diversos servicios.
-
-## 🤝 Contribución
-Las contribuciones se manejan mediante **Gitflow**. Cada miembro trabaja en su rama de `feature` y hace Pull Request hacia `develop`.
+## 🎯 Objetivo final
+Crear un sistema modular, profesional y listo para producción, elevando el estándar de MLOps del equipo.
