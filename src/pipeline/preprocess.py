@@ -92,7 +92,7 @@ def encode_features(df):
     Método: LabelEncoder
     Asigna un número a cada categoría. Ej: "Male"=1, "Female"=0.
 
-    ⚠️ Nota para el futuro: Me dice Tito GePeTo que LabelEncoder es simple pero tiene una limitación:
+    Nota para tener en cuenta  el futuro: Me dice Tito GePeTo que LabelEncoder es simple pero tiene una limitación:
     asigna un orden que no existe (ej: "Business"=0 < "Eco"=1 < "Eco Plus"=2).
     Para proyectos más avanzados, usa OneHotEncoder que crea columnas binarias.
     Para este proyecto, LabelEncoder funciona bien con RandomForest.
@@ -166,7 +166,7 @@ def preprocess_data(df):
     X, y, label_encoders = encode_features(df_clean)
 
     print("=" * 50)
-    print(f"  Preprocesamiento completo:")
+    print(f"   Preprocesamiento completo:")
     print(f"   Features (X): {X.shape}")
     print(f"   Target (y): {len(y)} valores")
     print(f"   Clases del target: {label_encoders[TARGET].classes_}")
