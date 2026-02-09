@@ -1,0 +1,51 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+
+# Virtual environments
+venv/
+.venv/
+env/
+.env
+
+# Git
+.git/
+.github/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Jupyter Notebooks
+notebooks/
+*.ipynb
+.ipynb_checkpoints/
+
+# Data (se monta como volumen)
+data/
+
+# Tests
+tests/
+pytest_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Docker (evitar recursión)
+docker/
+
+# Otros
+*.log
+*.tmp
+.DS_Store
+Thumbs.db
