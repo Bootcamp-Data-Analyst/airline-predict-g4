@@ -1,41 +1,57 @@
 """
 Streamlit Web Application for Airline Satisfaction Prediction.
 Provides an interactive interface for model inference.
+
+NOTE:
+- I added a DEMO_MODE so we can review UI/UX without requiring the full pipeline/scripts.
+- When DEMO_MODE=1, model/pipeline functions are stubbed and optional imports are skipped.
 """
 
-import streamlit as st
-import pandas as pd
-import sys
 import os
+import sys
+from typing import Any, Dict
 
+import pandas as pd
+import streamlit as st
+
+# -----------------------------------------------------------------------------
+# Demo mode (UI preview without pipeline)
+# -----------------------------------------------------------------------------
 DEMO_MODE = os.getenv("DEMO_MODE", "0") == "1"
 
-# Adjust path to find scripts module (repo root / src layout)
-sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
+# Repo layout: src/app/app.py
+# scripts/ is expected under src/scripts
+SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if SRC_DIR not in sys.path:
+    sys.path.append(SRC_DIR)
 
+# -----------------------------------------------------------------------------
+# Try to import pipeline/scripts; if not available, keep UI running in DEMO_MODE
+# -----------------------------------------------------------------------------
 try:
     from scripts.predict import predict_with_probability, validate_input
     from scripts.logging_utils import log_prediction_result, get_prediction_stats
     from scripts.model_utils import check_model_exists, load_metrics
-
 except ModuleNotFoundError:
     if not DEMO_MODE:
         raise
 
     # --- DEMO STUBS (just to see UI without pipeline) ---
-    def check_model_exists():
+    def check_model_exists() -> bool:
         return True
 
-    def load_metrics():
+    def load_metrics() -> Dict[str, Any]:
         return {
             "test": {"accuracy": 0.92, "precision": 0.91, "recall": 0.90, "f1": 0.905},
             "overfitting": {"is_overfitting": False},
         }
 
-    def validate_input(input_data):
+    def validate_input(input_data: Dict[str, Any]):
+        # Always "valid" in demo so we can trigger the result area
         return True, []
 
-    def predict_with_probability(input_data, model_type="rf"):
+    def predict_with_probability(input_data: Dict[str, Any], model_type: str = "rf") -> Dict[str, Any]:
+        # Simple simulation: higher average ratings -> higher probability of satisfied
         rating_keys = [
             "Inflight wifi service",
             "Departure/Arrival time convenient",
@@ -65,21 +81,21 @@ except ModuleNotFoundError:
             "probability_dissatisfied": 1 - prob_sat,
         }
 
-    def log_prediction_result(result, input_data):
+    def log_prediction_result(result: Dict[str, Any], input_data: Dict[str, Any]) -> None:
         return None
 
-    def get_prediction_stats():
+    def get_prediction_stats() -> Dict[str, Any]:
         return {"total_predictions": 12, "avg_confidence": 0.78}
+
 
 # =============================================================================
 # App constants
 # =============================================================================
-
 APP_NAME = "Airline Predict"
 MODEL_BADGE = "Model v1 — Satisfaction"
 
-# Brand assets (already in repo)
-ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "..", "src", "app", "assets"))
+# Assets live here: src/app/assets/*
+ASSETS_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), "assets"))
 LOGO_LIGHT = os.path.join(ASSETS_DIR, "logo-airline-predict-light.png")
 LOGO_DARK = os.path.join(ASSETS_DIR, "logo-airline-predict-dark.png")
 LOGO_ICON = os.path.join(ASSETS_DIR, "logo-airline-predict-icon.png")
@@ -97,7 +113,7 @@ def set_page() -> None:
     """
     I keep this in one place so it’s easy to tweak later.
     - If favicon exists, I use it.
-    - Otherwise I fall back to an emoji to avoid breaking the app.
+    - Otherwise I fall back to an emoji so the app never breaks.
     """
     page_icon = FAVICON_32 if file_exists(FAVICON_32) else "✈️"
     st.set_page_config(
@@ -109,9 +125,8 @@ def set_page() -> None:
 
 
 # =============================================================================
-# Styling (from my Streamlit UX version)
+# Styling (dashboard look + accessible focus)
 # =============================================================================
-
 def inject_css() -> None:
     """
     I’m using a small set of design tokens so we keep consistency across:
@@ -298,17 +313,12 @@ def inject_css() -> None:
             border-right: 1px solid var(--ap-border) !important;
           }
 
-          /* Brand header */
+          /* Header layout */
           .ap-header{
             display:flex;
             align-items:center;
             gap:12px;
             margin-bottom: .25rem;
-          }
-          .ap-logo{
-            height: 34px;
-            width: auto;
-            display:block;
           }
           .ap-title{
             font-size: 1.45rem;
@@ -322,7 +332,6 @@ def inject_css() -> None:
             margin-top: .25rem;
           }
 
-          /* Prediction result cards */
           .ap-result{
             border-radius: var(--ap-radius);
             border: 1px solid var(--ap-border);
@@ -336,7 +345,6 @@ def inject_css() -> None:
 
           @media (max-width: 640px){
             .block-container{ padding-top: .85rem; }
-            .ap-logo{ height: 30px; }
             .ap-title{ font-size: 1.25rem; }
           }
 
@@ -358,14 +366,14 @@ def inject_css() -> None:
 
 def render_brand_header() -> None:
     """
-    I’m showing a light/dark logo based on user theme.
-    Streamlit doesn’t expose theme directly, so I load a safe default and keep layout stable.
+    I show the logo if it exists, otherwise I fall back to a title.
+    I keep the layout stable so it doesn't jump around between machines.
     """
     left, right = st.columns([3, 1])
 
     with left:
-        # Prefer SVG if present, otherwise PNG.
         logo_path = None
+        # Prefer PNG for Streamlit preview; SVG support depends on environment.
         if file_exists(LOGO_LIGHT):
             logo_path = LOGO_LIGHT
         elif file_exists(LOGO_ICON):
@@ -393,22 +401,16 @@ def render_brand_header() -> None:
         )
 
     with right:
-        # I keep this simple: completion is “how much of the form is filled”.
-        # For now I’m tracking only required passenger fields + service sliders.
-        # If we want, we can refine this later into a proper progress model.
         st.metric("Session", "Ready")
 
 
 # =============================================================================
-# Main app (Mariana’s model logic stays intact)
+# Main app
 # =============================================================================
-
-def main():
-    """Main Application Function."""
-
+def main() -> None:
     render_brand_header()
 
-    # Check Model Availability (unchanged)
+    # Check Model Availability
     if not check_model_exists():
         st.error(
             """
@@ -422,20 +424,22 @@ def main():
         )
         st.stop()
 
-    # Sidebar (same content, new layout style)
+    # Sidebar
     with st.sidebar:
         st.markdown("### ⚙️ Configuration")
         st.caption("Choose which model to use for inference.")
 
         model_options = ["Random Forest"]
-       # Check if NN model exists (optional)
-if not DEMO_MODE:
-    from scripts.paths import MODEL_NN_PATH
-    if os.path.exists(MODEL_NN_PATH):
-        model_options.append("Neural Network (Keras)")
-else:
-    # Demo: keep only RF option to avoid missing pipeline modules
-    pass
+
+        # Optional: NN model (only when pipeline is available)
+        if not DEMO_MODE:
+            try:
+                from scripts.paths import MODEL_NN_PATH
+                if os.path.exists(MODEL_NN_PATH):
+                    model_options.append("Neural Network (Keras)")
+            except ModuleNotFoundError:
+                # If scripts exists partially, I keep the app usable with RF.
+                pass
 
         model_choice = st.selectbox("Select Model", model_options)
         model_type = "rf" if model_choice == "Random Forest" else "nn"
@@ -471,29 +475,33 @@ else:
         st.divider()
         st.markdown("#### 🕵️ MLOps Monitoring")
 
-        @st.cache_data(ttl=600)
-        def get_drift_status_cached():
-            from scripts.monitor import check_data_drift
-            return check_data_drift()
-
-        drift_report = get_drift_status_cached()
-
-        st.write(f"Status: **{drift_report.get('status', 'Unknown')}**")
-        st.caption(f"Based on recent {drift_report.get('production_samples', 0)} samples vs Training Data")
-
-        if drift_report.get("drift_detected"):
-            st.error("⚠️ DATA DRIFT DETECTED")
-            st.write("Variables affected:")
-            for feature in drift_report.get("drifting_features", []):
-                st.write(f"- {feature}")
+        if DEMO_MODE:
+            st.caption("Demo mode: monitoring is disabled (no pipeline connected).")
+            st.info("Status: **Demo**")
         else:
-            st.success("✅ Distribution Stable")
+            @st.cache_data(ttl=600)
+            def get_drift_status_cached():
+                from scripts.monitor import check_data_drift
+                return check_data_drift()
+
+            drift_report = get_drift_status_cached()
+
+            st.write(f"Status: **{drift_report.get('status', 'Unknown')}**")
+            st.caption(f"Based on recent {drift_report.get('production_samples', 0)} samples vs Training Data")
+
+            if drift_report.get("drift_detected"):
+                st.error("⚠️ DATA DRIFT DETECTED")
+                st.write("Variables affected:")
+                for feature in drift_report.get("drifting_features", []):
+                    st.write(f"- {feature}")
+            else:
+                st.success("✅ Distribution Stable")
 
         st.divider()
         st.caption("Developed by Airline Predict G4")
         st.caption("Dataset: Airlines Customer Satisfaction")
 
-    # Main Form
+    # Main content
     st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
     st.markdown("<div class='ap-card-title'>📝 Passenger & Flight Details</div>", unsafe_allow_html=True)
     st.markdown(
@@ -562,7 +570,7 @@ else:
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Input Dictionary (unchanged)
+    # Input dictionary (same keys expected by Mariana’s model layer)
     input_data = {
         "Gender": gender,
         "Customer Type": customer_type,
@@ -590,7 +598,6 @@ else:
 
     st.divider()
 
-    # Predict Button (unchanged logic, improved hierarchy)
     col_btn1, col_btn2, col_btn3 = st.columns([1, 2, 1])
     if col_btn2.button("🔮 Predict Satisfaction", type="primary", use_container_width=True):
         is_valid, errors = validate_input(input_data)
@@ -612,7 +619,7 @@ else:
                     st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
                     st.markdown("<div class='ap-card-title'>🎯 Prediction Result</div>", unsafe_allow_html=True)
                     st.markdown(
-                        "<div class='ap-card-subtitle'>This is the predicted satisfaction label and confidence.</div>",
+                        "<div class='ap-card-subtitle'>Predicted label and confidence.</div>",
                         unsafe_allow_html=True,
                     )
 
@@ -642,9 +649,9 @@ else:
 
                     st.divider()
                     st.subheader("📊 Probability Breakdown")
-                    col1, col2 = st.columns(2)
-                    col1.metric("Satisfied Probability", f"{result['probability_satisfied']:.1%}")
-                    col2.metric("Dissatisfied Probability", f"{result['probability_dissatisfied']:.1%}")
+                    c1, c2 = st.columns(2)
+                    c1.metric("Satisfied Probability", f"{result['probability_satisfied']:.1%}")
+                    c2.metric("Dissatisfied Probability", f"{result['probability_dissatisfied']:.1%}")
 
                     st.progress(result["probability_satisfied"])
 
@@ -655,7 +662,7 @@ else:
 
     st.divider()
     st.caption("Airline Predict G4 — Satisfaction Classification Model")
-    st.caption("Powered by Streamlit, Scikit-learn & Optuna")
+    st.caption("Powered by Streamlit & Scikit-learn")
 
 
 if __name__ == "__main__":
