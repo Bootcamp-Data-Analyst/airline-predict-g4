@@ -9,10 +9,10 @@ NOTE:
 
 import os
 import sys
-from typing import Any, Dict
+from typing import Any, Dict, Tuple, List
 
-import pandas as pd
 import streamlit as st
+import pandas as pd
 
 # -----------------------------------------------------------------------------
 # Demo mode (UI preview without pipeline)
@@ -46,7 +46,7 @@ except ModuleNotFoundError:
             "overfitting": {"is_overfitting": False},
         }
 
-    def validate_input(input_data: Dict[str, Any]):
+    def validate_input(input_data: Dict[str, Any]) -> Tuple[bool, List[str]]:
         # Always "valid" in demo so we can trigger the result area
         return True, []
 
@@ -128,15 +128,6 @@ def set_page() -> None:
 # Styling (dashboard look + accessible focus)
 # =============================================================================
 def inject_css() -> None:
-    """
-    I’m using a small set of design tokens so we keep consistency across:
-    - cards
-    - buttons
-    - focus states
-    - dark mode
-
-    I’m keeping Streamlit defaults as much as possible so we don’t fight the framework.
-    """
     st.markdown(
         """
         <style>
@@ -313,7 +304,6 @@ def inject_css() -> None:
             border-right: 1px solid var(--ap-border) !important;
           }
 
-          /* Header layout */
           .ap-header{
             display:flex;
             align-items:center;
@@ -365,10 +355,6 @@ def inject_css() -> None:
 
 
 def render_brand_header() -> None:
-    """
-    I show the logo if it exists, otherwise I fall back to a title.
-    I keep the layout stable so it doesn't jump around between machines.
-    """
     left, right = st.columns([3, 1])
 
     with left:
@@ -431,14 +417,14 @@ def main() -> None:
 
         model_options = ["Random Forest"]
 
-        # Optional: NN model (only when pipeline is available)
+        # Optional NN: only try to import when NOT in demo mode
         if not DEMO_MODE:
             try:
-                from scripts.paths import MODEL_NN_PATH
+                from scripts.paths import MODEL_NN_PATH  # type: ignore
                 if os.path.exists(MODEL_NN_PATH):
                     model_options.append("Neural Network (Keras)")
             except ModuleNotFoundError:
-                # If scripts exists partially, I keep the app usable with RF.
+                # If scripts exists partially, keep the app usable with RF.
                 pass
 
         model_choice = st.selectbox("Select Model", model_options)
@@ -476,8 +462,12 @@ def main() -> None:
         st.markdown("#### 🕵️ MLOps Monitoring")
 
         if DEMO_MODE:
-            st.caption("Demo mode: monitoring is disabled (no pipeline connected).")
-            st.info("Status: **Demo**")
+            drift_report = {
+                "status": "Demo",
+                "production_samples": 0,
+                "drift_detected": False,
+                "drifting_features": [],
+            }
         else:
             @st.cache_data(ttl=600)
             def get_drift_status_cached():
@@ -486,16 +476,16 @@ def main() -> None:
 
             drift_report = get_drift_status_cached()
 
-            st.write(f"Status: **{drift_report.get('status', 'Unknown')}**")
-            st.caption(f"Based on recent {drift_report.get('production_samples', 0)} samples vs Training Data")
+        st.write(f"Status: **{drift_report.get('status', 'Unknown')}**")
+        st.caption(f"Based on recent {drift_report.get('production_samples', 0)} samples vs Training Data")
 
-            if drift_report.get("drift_detected"):
-                st.error("⚠️ DATA DRIFT DETECTED")
-                st.write("Variables affected:")
-                for feature in drift_report.get("drifting_features", []):
-                    st.write(f"- {feature}")
-            else:
-                st.success("✅ Distribution Stable")
+        if drift_report.get("drift_detected"):
+            st.error("⚠️ DATA DRIFT DETECTED")
+            st.write("Variables affected:")
+            for feature in drift_report.get("drifting_features", []):
+                st.write(f"- {feature}")
+        else:
+            st.success("✅ Distribution Stable")
 
         st.divider()
         st.caption("Developed by Airline Predict G4")
@@ -570,7 +560,7 @@ def main() -> None:
 
         st.markdown("</div>", unsafe_allow_html=True)
 
-    # Input dictionary (same keys expected by Mariana’s model layer)
+    # Input dictionary (same keys expected by the original model layer)
     input_data = {
         "Gender": gender,
         "Customer Type": customer_type,
@@ -618,10 +608,7 @@ def main() -> None:
                     st.divider()
                     st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
                     st.markdown("<div class='ap-card-title'>🎯 Prediction Result</div>", unsafe_allow_html=True)
-                    st.markdown(
-                        "<div class='ap-card-subtitle'>Predicted label and confidence.</div>",
-                        unsafe_allow_html=True,
-                    )
+                    st.markdown("<div class='ap-card-subtitle'>Predicted label and confidence.</div>", unsafe_allow_html=True)
 
                     conf = result["confidence"]
 
