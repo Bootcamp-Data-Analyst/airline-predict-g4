@@ -1,12 +1,11 @@
-pandas>=1.3.0
-scikit-learn>=1.0.0
-streamlit>=1.10.0
-numpy>=1.21.0
-matplotlib>=3.4.0
-seaborn>=0.11.0
-joblib>=1.1.0
-pytest>=7.0.0
-jupyterlab>=3.0.0
-python-dotenv>=0.19.0
-flasgger>=0.9.5
-Flask>=2.0.0
+# Core runtime (Streamlit app + model inference)
+streamlit>=1.30,<2.0
+pandas>=1.5,<3.0
+numpy>=1.23,<3.0
+scikit-learn>=1.2,<2.0
+joblib>=1.2,<2.0
+tensorflow>=2.13,<3.0
+
+# Optional but useful (only if we actually use .env in scripts/config)
+# python-dotenv>=1.0,<2.0
+
