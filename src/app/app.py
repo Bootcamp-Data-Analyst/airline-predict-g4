@@ -428,10 +428,14 @@ def main():
         st.caption("Choose which model to use for inference.")
 
         model_options = ["Random Forest"]
-        from scripts.paths import MODEL_NN_PATH
-
-        if os.path.exists(MODEL_NN_PATH):
-            model_options.append("Neural Network (Keras)")
+       # Check if NN model exists (optional)
+if not DEMO_MODE:
+    from scripts.paths import MODEL_NN_PATH
+    if os.path.exists(MODEL_NN_PATH):
+        model_options.append("Neural Network (Keras)")
+else:
+    # Demo: keep only RF option to avoid missing pipeline modules
+    pass
 
         model_choice = st.selectbox("Select Model", model_options)
         model_type = "rf" if model_choice == "Random Forest" else "nn"
