@@ -1,4 +1,4 @@
-import streamlit as st
+import streamlit as st 
 import pandas as pd
 import sys
 import os
@@ -80,72 +80,230 @@ def inject_css() -> None:
     st.markdown(
         """
         <style>
+          /* Design tokens (kept small so it's easy to tweak later) */
+          :root{
+            --ap-bg: #ffffff;
+            --ap-surface: #ffffff;
+            --ap-text: rgba(0,0,0,.88);
+            --ap-text-muted: rgba(0,0,0,.62);
+            --ap-border: rgba(0,0,0,.10);
+            --ap-border-strong: rgba(0,0,0,.14);
+            --ap-shadow: 0 10px 30px rgba(0,0,0,.06);
+            --ap-shadow-soft: 0 6px 18px rgba(0,0,0,.06);
+            --ap-radius: 16px;
+            --ap-radius-sm: 12px;
+            --ap-focus: rgba(31,60,136,.28);
+            --ap-accent: #1F3C88;
+            --ap-accent-soft: rgba(31,60,136,.08);
+            --ap-success: rgba(18,125,73,.16);
+            --ap-warning: rgba(176,116,0,.16);
+            --ap-danger: rgba(176,30,30,.16);
+            --ap-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+          }
+
+          /* Dark mode support (so the dashboard doesn't break in system dark theme) */
+          @media (prefers-color-scheme: dark){
+            :root{
+              --ap-bg: #0b0f17;
+              --ap-surface: rgba(255,255,255,.06);
+              --ap-text: rgba(255,255,255,.90);
+              --ap-text-muted: rgba(255,255,255,.68);
+              --ap-border: rgba(255,255,255,.12);
+              --ap-border-strong: rgba(255,255,255,.18);
+              --ap-shadow: 0 10px 30px rgba(0,0,0,.35);
+              --ap-shadow-soft: 0 6px 18px rgba(0,0,0,.28);
+              --ap-focus: rgba(120,155,255,.30);
+              --ap-accent: #8FB2FF;
+              --ap-accent-soft: rgba(143,178,255,.12);
+            }
+          }
+
+          /* Base typography + smoothing */
+          html, body, [class*="stApp"]{
+            font-family: var(--ap-font);
+            color: var(--ap-text);
+            text-rendering: optimizeLegibility;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+          }
+
           /* Layout */
-          .block-container { padding-top: 1.25rem; padding-bottom: 2.5rem; max-width: 1180px; }
+          .block-container{
+            padding-top: 1.25rem;
+            padding-bottom: 2.5rem;
+            max-width: 1180px;
+          }
+
+          /* Subtle app background so cards feel grounded */
+          [data-testid="stAppViewContainer"]{
+            background: radial-gradient(1200px 600px at 15% 0%, var(--ap-accent-soft), transparent 60%),
+                        radial-gradient(900px 500px at 85% 10%, rgba(0,0,0,.03), transparent 55%),
+                        var(--ap-bg);
+          }
+          @media (prefers-color-scheme: dark){
+            [data-testid="stAppViewContainer"]{
+              background: radial-gradient(1200px 600px at 15% 0%, rgba(143,178,255,.10), transparent 60%),
+                          radial-gradient(900px 500px at 85% 10%, rgba(255,255,255,.04), transparent 55%),
+                          var(--ap-bg);
+            }
+          }
 
           /* Header badge */
-          .ap-badge {
-            display:inline-block;
-            padding: 0.25rem 0.55rem;
+          .ap-badge{
+            display:inline-flex;
+            align-items:center;
+            gap:.35rem;
+            padding: 0.28rem 0.62rem;
             border-radius: 999px;
             font-size: 12px;
-            border: 1px solid rgba(31,60,136,0.20);
-            background: rgba(31,60,136,0.06);
-            color: #1F3C88;
+            border: 1px solid color-mix(in srgb, var(--ap-accent) 22%, transparent);
+            background: var(--ap-accent-soft);
+            color: var(--ap-accent);
             vertical-align: middle;
             margin-left: 0.5rem;
+            line-height: 1;
+            letter-spacing: .2px;
           }
 
           /* Card container */
-          .ap-card {
-            border: 1px solid rgba(0,0,0,0.08);
-            border-radius: 14px;
+          .ap-card{
+            border: 1px solid var(--ap-border);
+            border-radius: var(--ap-radius);
             padding: 16px 16px 14px 16px;
-            background: white;
+            background: var(--ap-surface);
+            box-shadow: var(--ap-shadow-soft);
+            backdrop-filter: saturate(120%) blur(6px);
           }
-          .ap-card-title {
+          .ap-card-title{
             font-size: 16px;
             font-weight: 650;
             margin-bottom: 2px;
+            letter-spacing: .2px;
           }
-          .ap-card-subtitle {
-            color: rgba(0,0,0,0.60);
+          .ap-card-subtitle{
+            color: var(--ap-text-muted);
             font-size: 13px;
             margin-bottom: 10px;
           }
 
           /* Microcopy */
-          .ap-microcopy {
-            color: rgba(0,0,0,0.55);
+          .ap-microcopy{
+            color: var(--ap-text-muted);
             font-size: 12px;
             margin-top: -6px;
             margin-bottom: 8px;
           }
 
-          /* Primary CTA */
-          div.stButton > button[kind="primary"] {
-            border-radius: 12px;
-            padding: 0.65rem 1.0rem;
-            font-weight: 650;
+          /* Streamlit dividers: lighter + more consistent rhythm */
+          hr{
+            border: none !important;
+            height: 1px !important;
+            background: var(--ap-border) !important;
+            margin: .85rem 0 !important;
           }
 
-          /* Link-style secondary action */
-          .ap-link-btn button {
+          /* Labels and captions: keep readable hierarchy */
+          [data-testid="stCaptionContainer"]{
+            color: var(--ap-text-muted);
+          }
+          label, .stMarkdown p{
+            line-height: 1.45;
+          }
+
+          /* Inputs: consistent radius + focus ring (keyboard accessible) */
+          .stTextInput input,
+          .stNumberInput input,
+          .stSelectbox div[data-baseweb="select"] > div,
+          .stTextArea textarea{
+            border-radius: var(--ap-radius-sm) !important;
+            border-color: var(--ap-border-strong) !important;
+          }
+
+          /* Focus states: visible, not noisy */
+          :is(button, input, textarea, [role="combobox"], [role="radio"], a):focus{
+            outline: none !important;
+          }
+          :is(button, input, textarea, [role="combobox"], a):focus-visible{
+            box-shadow: 0 0 0 4px var(--ap-focus) !important;
+            border-radius: var(--ap-radius-sm);
+          }
+          /* Radio pills can be tricky; at least keep group focus readable */
+          [data-testid="stRadio"] :focus-visible{
+            box-shadow: 0 0 0 4px var(--ap-focus) !important;
+            border-radius: 999px;
+          }
+
+          /* Primary CTA: modern pill, better hover/active, keeps Streamlit kind="primary" */
+          div.stButton > button[kind="primary"]{
+            border-radius: 14px !important;
+            padding: 0.70rem 1.05rem !important;
+            font-weight: 650 !important;
+            border: 1px solid color-mix(in srgb, var(--ap-accent) 35%, transparent) !important;
+            background: linear-gradient(180deg,
+              color-mix(in srgb, var(--ap-accent) 92%, #ffffff 8%),
+              color-mix(in srgb, var(--ap-accent) 78%, #000000 22%)
+            ) !important;
+          }
+          div.stButton > button[kind="primary"]:hover{
+            transform: translateY(-1px);
+            box-shadow: var(--ap-shadow);
+          }
+          div.stButton > button[kind="primary"]:active{
+            transform: translateY(0px);
+            box-shadow: var(--ap-shadow-soft);
+          }
+
+          /* Secondary: link-style button (keeps hierarchy) */
+          .ap-link-btn button{
             background: transparent !important;
             border: none !important;
-            color: #1F3C88 !important;
+            color: var(--ap-accent) !important;
             padding: 0.25rem 0.25rem !important;
-            font-weight: 600 !important;
+            font-weight: 650 !important;
             text-decoration: underline;
+            text-underline-offset: 3px;
+          }
+          .ap-link-btn button:hover{
+            opacity: .92;
+          }
+
+          /* Expander: smoother, clearer hit area */
+          details{
+            border-radius: var(--ap-radius) !important;
+            border: 1px solid var(--ap-border) !important;
+            background: color-mix(in srgb, var(--ap-surface) 92%, transparent) !important;
+            box-shadow: none !important;
+            overflow: hidden;
+          }
+          details > summary{
+            padding: .95rem 1rem !important;
+            cursor: pointer;
+            color: var(--ap-text) !important;
+          }
+          details[open] > summary{
+            border-bottom: 1px solid var(--ap-border) !important;
+          }
+
+          /* Sidebar: slightly softer separation */
+          [data-testid="stSidebar"]{
+            border-right: 1px solid var(--ap-border) !important;
+          }
+
+          /* Reduce motion for accessibility */
+          @media (prefers-reduced-motion: reduce){
+            *{
+              animation: none !important;
+              transition: none !important;
+              scroll-behavior: auto !important;
+            }
+            div.stButton > button[kind="primary"]:hover{
+              transform: none !important;
+            }
           }
 
           /*
             NOTE: Streamlit doesn’t expose per-option styling for radio inputs in a robust way.
-            To avoid using “error red” for low scores, I’m relying on:
-              - clear labels + microcopy
-              - live CSAT feedback
-              - neutral UI colors
-            If we later move to a custom component, we can add a soft semantic gradient.
+            I avoided semantic colors for scores so low ratings don’t read as “error”.
           */
         </style>
         """,
