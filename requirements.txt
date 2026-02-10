@@ -1,11 +1,22 @@
-# Core runtime (Streamlit app + model inference)
+# Core app runtime
 streamlit>=1.30,<2.0
 pandas>=1.5,<3.0
 numpy>=1.23,<3.0
+
+# ML / inference
 scikit-learn>=1.2,<2.0
 joblib>=1.2,<2.0
-tensorflow>=2.13,<3.0
 
-# Optional but useful (only if we actually use .env in scripts/config)
+# Data exploration (not required for production, useful during development)
+matplotlib>=3.7,<4.0
+seaborn>=0.12,<1.0
+jupyterlab>=4.0,<5.0
+
+# Testing
+pytest>=7.0,<9.0
+
+# Optional (only include if we end up using it)
+# tensorflow>=2.13,<3.0
+
+# Optional (only include if we use .env locally)
 # python-dotenv>=1.0,<2.0
-
