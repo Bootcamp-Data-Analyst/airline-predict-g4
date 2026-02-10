@@ -1,176 +1,257 @@
 """
-Preprocessing module for training and prediction.
-Handles data cleaning, encoding, and feature engineering.
+Preprocessing pipeline for the Airlines Dataset.
+Handles data cleaning, transformation, and feature engineering.
 """
+
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import LabelEncoder, OrdinalEncoder
+from sklearn.pipeline import Pipeline
 from sklearn.compose import ColumnTransformer
-from sklearn.preprocessing import StandardScaler
+from sklearn.preprocessing import StandardScaler, OneHotEncoder
+from sklearn.impute import SimpleImputer
 import joblib
-from pathlib import Path
+import os
+import sys
+
+# Add project root to path
+sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+try:
+    from scripts.paths import PREPROCESSOR_PATH
+except ImportError:
+    from paths import PREPROCESSOR_PATH
+
+# Configuration
+COLUMNS_TO_DROP = ['Unnamed: 0', 'id']
+TARGET_COLUMN = 'satisfaction'
+
+NUMERIC_FEATURES = [
+    'Age', 'Flight Distance', 
+    'Inflight wifi service', 'Departure/Arrival time convenient',
+    'Ease of Online booking', 'Gate location', 'Food and drink',
+    'Online boarding', 'Seat comfort', 'Inflight entertainment',
+    'On-board service', 'Leg room service', 'Baggage handling',
+    'Checkin service', 'Inflight service', 'Cleanliness',
+    'Departure Delay in Minutes', 'Arrival Delay in Minutes'
+]
+
+CATEGORICAL_FEATURES = [
+    'Gender', 'Customer Type', 'Type of Travel', 'Class'
+]
 
 
-# Target column
-TARGET = "satisfaction"
-
-# Columns to drop
-COLUMNS_TO_DROP = ["Unnamed: 0", "id"]
-
-# Ordinal encoding for Class (Eco < Eco Plus < Business)
-CLASS_ORDER = [["Eco", "Eco Plus", "Business"]]
-
-
-def clean_data(df):
+def clean_data(df: pd.DataFrame) -> pd.DataFrame:
     """
-    Cleans the dataset: removes unnecessary columns and handles nulls.
+    Cleans the DataFrame by removing unnecessary columns and duplicates.
     
     Args:
-        df (pd.DataFrame): Raw dataset
+        df (pd.DataFrame): Raw dataframe
         
     Returns:
-        pd.DataFrame: Cleaned dataset
+        pd.DataFrame: Cleaned dataframe
     """
-    df = df.copy()
+    df_clean = df.copy()
     
-    # Drop unnecessary columns
-    df = df.drop(columns=COLUMNS_TO_DROP, errors='ignore')
-    print(f"  ✓ Columns dropped: {COLUMNS_TO_DROP}")
+    # Drop columns
+    cols_to_drop = [col for col in COLUMNS_TO_DROP if col in df_clean.columns]
+    if cols_to_drop:
+        df_clean = df_clean.drop(columns=cols_to_drop)
+        print(f"✅ Dropped columns: {cols_to_drop}")
     
-    # Handle nulls in 'Arrival Delay in Minutes'
-    if 'Arrival Delay in Minutes' in df.columns:
-        median_value = df['Arrival Delay in Minutes'].median()
-        df['Arrival Delay in Minutes'] = df['Arrival Delay in Minutes'].fillna(median_value)
-        print(f"  ✓ Nulls filled with median: {median_value}")
+    # Drop duplicates
+    before = len(df_clean)
+    df_clean = df_clean.drop_duplicates()
+    n_duplicates = before - len(df_clean)
+    if n_duplicates > 0:
+        print(f"✅ Dropped duplicates: {n_duplicates}")
     
-    # Drop remaining nulls
-    remaining_nulls = df.isnull().sum().sum()
-    if remaining_nulls > 0:
-        df = df.dropna()
-        print(f"  ✓ Dropped {remaining_nulls} remaining null rows")
-    
-    print(f"  ✓ Clean dataset shape: {df.shape}")
-    return df
+    return df_clean
 
 
-def encode_features(df):
+def create_preprocessing_pipeline() -> ColumnTransformer:
     """
-    Encodes categorical features for training.
+    Creates the sklearn preprocessing pipeline.
+    
+    Returns:
+        ColumnTransformer: Configured preprocessor
+    """
+    # Numeric Pipeline
+    numeric_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='median')),
+        ('scaler', StandardScaler())
+    ])
+    
+    # Categorical Pipeline
+    categorical_transformer = Pipeline(steps=[
+        ('imputer', SimpleImputer(strategy='most_frequent')),
+        ('encoder', OneHotEncoder(handle_unknown='ignore', sparse_output=False))
+    ])
+    
+    # Combine Transformers
+    preprocessor = ColumnTransformer(
+        transformers=[
+            ('num', numeric_transformer, NUMERIC_FEATURES),
+            ('cat', categorical_transformer, CATEGORICAL_FEATURES)
+        ],
+        remainder='drop'
+    )
+    
+    return preprocessor
+
+
+def encode_target(y: pd.Series) -> np.ndarray:
+    """
+    Encodes target variable to numeric.
     
     Args:
-        df (pd.DataFrame): Cleaned dataset (without target)
+        y (pd.Series): Target series
         
     Returns:
-        tuple: (X_encoded, encoders_dict)
+        np.ndarray: Encoded target (1=satisfied, 0=neutral or dissatisfied)
     """
-    df = df.copy()
-    encoders = {}
-    
-    # Identify categorical columns
-    categorical_cols = df.select_dtypes(include=['object']).columns.tolist()
-    print(f"  ✓ Categorical columns: {categorical_cols}")
-    
-    # Encode 'Class' with OrdinalEncoder
-    if 'Class' in categorical_cols:
-        ord_enc = OrdinalEncoder(categories=CLASS_ORDER)
-        df['Class'] = ord_enc.fit_transform(df[['Class']]).astype(int)
-        encoders['Class'] = ord_enc
-        print(f"    - Class (OrdinalEncoder): Eco=0, Eco Plus=1, Business=2")
-        categorical_cols.remove('Class')
-    
-    # Encode remaining categorical columns with LabelEncoder
-    for col in categorical_cols:
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col])
-        encoders[col] = le
-        print(f"    - {col} (LabelEncoder): {dict(zip(le.classes_, le.transform(le.classes_)))}")
-    
-    return df, encoders
+    mapping = {'satisfied': 1, 'neutral or dissatisfied': 0}
+    return y.map(mapping).values
 
 
-def preprocess_for_training(df):
+def decode_target(y: np.ndarray) -> list:
     """
-    Full preprocessing pipeline for training.
+    Decodes target numeric values to original labels.
     
     Args:
-        df (pd.DataFrame): Raw dataset
+        y (np.ndarray): Encoded target values
         
     Returns:
-        tuple: (X, y, preprocessor)
-            - X: Encoded features
-            - y: Encoded target
-            - preprocessor: Dictionary with encoders and target encoder
+        list: Decoded labels
     """
-    print("\n��� Starting preprocessing...")
-    print("=" * 50)
+    mapping = {1: 'satisfied', 0: 'neutral or dissatisfied'}
+    return [mapping.get(val, "unknown") for val in y]
+
+
+def load_data():
+    """Load the raw airlines dataset."""
+    data_dir = os.path.join(os.path.dirname(__file__), '..', 'data', 'raw')
+    csv_path = os.path.join(data_dir, 'airlines.csv')
+    return pd.read_csv(csv_path)
+
+
+def preprocess_for_training(df: pd.DataFrame, preprocessor: ColumnTransformer = None):
+    """
+    Preprocesses data for training (fit_transform).
     
-    # Clean data
+    Args:
+        df (pd.DataFrame): Training data
+        preprocessor (ColumnTransformer): Optional existing preprocessor
+        
+    Returns:
+        tuple: (X_transformed, y_encoded, preprocessor)
+    """
     df_clean = clean_data(df)
     
-    # Separate features and target
-    if TARGET not in df_clean.columns:
-        raise ValueError(f"Target column '{TARGET}' not found in dataset")
+    X = df_clean.drop(columns=[TARGET_COLUMN])
+    y = df_clean[TARGET_COLUMN]
     
-    X = df_clean.drop(TARGET, axis=1)
-    y = df_clean[TARGET]
+    if preprocessor is None:
+        preprocessor = create_preprocessing_pipeline()
     
-    # Encode features
-    X_encoded, feature_encoders = encode_features(X)
+    X_transformed = preprocessor.fit_transform(X)
+    y_encoded = encode_target(y)
     
-    # Encode target
-    target_encoder = LabelEncoder()
-    y_encoded = target_encoder.fit_transform(y)
-    print(f"  ✓ Target encoded: {dict(zip(target_encoder.classes_, target_encoder.transform(target_encoder.classes_)))}")
+    print(f"✅ Preprocessing complete. X shape: {X_transformed.shape}")
     
-    # Create preprocessor object
-    preprocessor = {
-        'feature_encoders': feature_encoders,
-        'target_encoder': target_encoder,
-        'feature_columns': list(X_encoded.columns)
-    }
-    
-    print("=" * 50)
-    print(f"✅ Preprocessing complete:")
-    print(f"   Features (X): {X_encoded.shape}")
-    print(f"   Target (y): {len(y_encoded)} values")
-    
-    return X_encoded, y_encoded, preprocessor
+    return X_transformed, y_encoded, preprocessor
 
 
-def save_preprocessor(preprocessor, filepath: str):
+def preprocess_for_prediction(df: pd.DataFrame, preprocessor: ColumnTransformer) -> np.ndarray:
     """
-    Saves the preprocessor to disk.
+    Preprocesses data for prediction (transform only).
     
     Args:
-        preprocessor (dict): Preprocessor with encoders
-        filepath (str): Path to save
+        df (pd.DataFrame): Input data
+        preprocessor (ColumnTransformer): Fitted preprocessor
+        
+    Returns:
+        np.ndarray: Transformed data
     """
-    filepath = Path(filepath)
-    filepath.parent.mkdir(parents=True, exist_ok=True)
+    if isinstance(df, dict):
+        df = pd.DataFrame([df])
     
+    return preprocessor.transform(df)
+
+
+def preprocess_single_input(sample: dict, encoders) -> pd.DataFrame:
+    """
+    Preprocesses a single input sample for prediction.
+    
+    Args:
+        sample (dict): Single input sample
+        encoders: Fitted encoders/preprocessor
+        
+    Returns:
+        pd.DataFrame: Preprocessed sample
+    """
+    return preprocess_for_prediction(sample, encoders)
+
+
+def save_preprocessor(preprocessor: ColumnTransformer, filepath: str = str(PREPROCESSOR_PATH)):
+    """Saves the preprocessor artifact."""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
     joblib.dump(preprocessor, filepath)
     print(f"✅ Preprocessor saved to: {filepath}")
 
 
-def load_preprocessor(filepath: str):
+def load_preprocessor(filepath: str = str(PREPROCESSOR_PATH)) -> ColumnTransformer:
+    """Loads the preprocessor artifact."""
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Preprocessor not found at: {filepath}")
+    return joblib.load(filepath)
+
+
+def decode_prediction(prediction, encoders):
     """
-    Loads a saved preprocessor.
-    
+    Converts numeric prediction (0/1) back to readable text.
     Args:
-        filepath (str): Path to preprocessor file
-        
+        prediction: Array with predictions (0 or 1).
+        encoders (dict): Encoders from training.
     Returns:
-        dict: Preprocessor with encoders
+        Array with text: "satisfied" or "neutral or dissatisfied".
     """
-    filepath = Path(filepath)
-    
-    if not filepath.exists():
-        raise FileNotFoundError(f"Preprocessor file not found: {filepath}")
-    
-    preprocessor = joblib.load(filepath)
-    print(f"✅ Preprocessor loaded from: {filepath}")
-    return preprocessor
+    if hasattr(encoders, 'named_transformers_'):
+        # It's a ColumnTransformer, decode using decode_target
+        return decode_target(prediction)
+    return prediction
 
 
 if __name__ == "__main__":
-    print("Preprocessing module loaded successfully")
+    print("=" * 60)
+    print("PREPROCESSING MODULE TEST")
+    print("=" * 60)
+    # Test 1: Full dataset preprocessing
+    print("\n--- Test 1: Full dataset ---")
+    df = load_data()
+    X, y, encoders = preprocess_for_training(df)
+    print(f"Features shape: {X.shape}")
+    print(f"Target values: {np.unique(y)}")
+    # Test 2: Save and load preprocessor
+    print("\n--- Test 2: Save/Load preprocessor ---")
+    save_preprocessor(encoders)
+    loaded_encoders = load_preprocessor()
+    print(f"Encoders keys: {list(loaded_encoders.named_transformers_.keys())}")
+    # Test 3: Single input (simulating Streamlit form)
+    print("\n--- Test 3: Single input ---")
+    sample = {
+        'Gender': 'Male', 'Customer Type': 'Loyal Customer', 'Age': 35,
+        'Type of Travel': 'Business travel', 'Class': 'Business',
+        'Flight Distance': 1500, 'Inflight wifi service': 4,
+        'Departure/Arrival time convenient': 3, 'Ease of Online booking': 4,
+        'Gate location': 3, 'Food and drink': 4, 'Online boarding': 5,
+        'Seat comfort': 4, 'Inflight entertainment': 5, 'On-board service': 4,
+        'Leg room service': 4, 'Baggage handling': 4, 'Checkin service': 3,
+        'Inflight service': 4, 'Cleanliness': 4,
+        'Departure Delay in Minutes': 10, 'Arrival Delay in Minutes': 5
+    }
+    X_single = preprocess_single_input(sample, encoders)
+    print(f"Processed shape: {X_single.shape}")
+    print(f"Class value: {X_single[0, 4]}")
+    print("\n" + "=" * 60)
+    print("ALL TESTS PASSED")
+    print("=" * 60)
