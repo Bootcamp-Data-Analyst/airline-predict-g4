@@ -7,69 +7,15 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+from typing import Dict, Any, Optional, Tuple
 
-DEMO_MODE = os.getenv("DEMO_MODE", "0") == "1"
-
-# Adjust path to find scripts module (repo root / src layout)
+# Adjust path to find scripts module
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
-try:
-    from scripts.predict import predict_with_probability, validate_input
-    from scripts.logging_utils import log_prediction_result, get_prediction_stats
-    from scripts.model_utils import check_model_exists, load_metrics
+from scripts.predict import predict_with_probability, validate_input
+from scripts.logging_utils import log_prediction_result, get_prediction_stats
+from scripts.model_utils import check_model_exists, load_metrics
 
-except ModuleNotFoundError:
-    if not DEMO_MODE:
-        raise
-
-    # --- DEMO STUBS (just to see UI without pipeline) ---
-    def check_model_exists():
-        return True
-
-    def load_metrics():
-        return {
-            "test": {"accuracy": 0.92, "precision": 0.91, "recall": 0.90, "f1": 0.905},
-            "overfitting": {"is_overfitting": False},
-        }
-
-    def validate_input(input_data):
-        return True, []
-
-    def predict_with_probability(input_data, model_type="rf"):
-        rating_keys = [
-            "Inflight wifi service",
-            "Departure/Arrival time convenient",
-            "Ease of Online booking",
-            "Gate location",
-            "Food and drink",
-            "Online boarding",
-            "Seat comfort",
-            "Inflight entertainment",
-            "On-board service",
-            "Leg room service",
-            "Baggage handling",
-            "Checkin service",
-            "Inflight service",
-            "Cleanliness",
-        ]
-        vals = [input_data.get(k) for k in rating_keys if isinstance(input_data.get(k), (int, float))]
-        avg = sum(vals) / len(vals) if vals else 3.0
-        prob_sat = min(max((avg - 1) / 4, 0.05), 0.95)
-
-        pred = 1 if prob_sat >= 0.5 else 0
-        return {
-            "prediction": pred,
-            "prediction_label": "satisfied" if pred == 1 else "neutral/dissatisfied",
-            "confidence": prob_sat if pred == 1 else (1 - prob_sat),
-            "probability_satisfied": prob_sat,
-            "probability_dissatisfied": 1 - prob_sat,
-        }
-
-    def log_prediction_result(result, input_data):
-        return None
-
-    def get_prediction_stats():
-        return {"total_predictions": 12, "avg_confidence": 0.78}
 
 # =============================================================================
 # App constants
