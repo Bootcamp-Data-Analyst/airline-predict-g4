@@ -234,6 +234,7 @@ def train_model():
     
     return final_model
 
+joblib.dump(final_model, "model_final.pkl")
 
 if __name__ == "__main__":
     print("=" * 60)
