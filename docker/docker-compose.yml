@@ -1,0 +1,17 @@
+version: '3.8'
+
+services:
+  airline-app:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    container_name: airline_satisfaction_app
+    ports:
+      - "8501:8501"
+    volumes:
+      - ../app:/app/app
+      - ../models:/app/models
+      - ../data:/app/data
+    environment:
+      - PYTHONUNBUFFERED=1
+    restart: always
