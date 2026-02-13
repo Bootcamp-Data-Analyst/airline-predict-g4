@@ -23,9 +23,14 @@ try:
     from scripts.predict import predict_satisfaction
     from scripts.database import insert_prediction
 except ImportError as e:
-    logger.error(f"Failed to import scripts: {e}", exc_info=True)
+    import traceback
+    error_details = traceback.format_exc()
+    logger.error(f"Failed to import scripts: {e}\n{error_details}")
     # Showing the specific error in the UI to help debugging
-    st.error(f"⚠️ Error cargando componentes: {e}. Verifique logs.")
+    st.error(f"⚠️ Error cargando componentes: {e}")
+    with st.expander("Ver detalles técnicos"):
+        st.code(error_details)
+    
     def predict_satisfaction(data):
         return {"prediction": "Error", "probability_satisfied": 0.0, "probability_dissatisfied": 0.0}
     def insert_prediction(*args, **kwargs):
@@ -168,12 +173,17 @@ def get_passenger_data() -> pd.DataFrame:
 
 
 
-# =============================================================================
-# UI sections (split so we can iterate without breaking everything)
-# =============================================================================
 
 def render_sidebar():
-    st.sidebar.title(APP_NAME)
+    # Logo
+    try:
+        logo_path = os.path.join(project_root, "assets", "logo.svg")
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, use_container_width=True)
+    except Exception:
+        pass
+
+    # nav radio
     st.sidebar.caption(f"Modelo {MODEL_VERSION}")
     
     opts = ["Datos Vuelo", "Evaluación", "Resultados"]
@@ -283,8 +293,16 @@ def main():
     init_state()
     render_sidebar()
 
+    # Main content
+    # Banner
+    try:
+        banner_path = os.path.join(project_root, "assets", "banner.svg")
+        if os.path.exists(banner_path):
+             st.image(banner_path, use_container_width=True)
+    except Exception:
+        pass
+
     nav = st.session_state["nav"]
-    st.title(f"✈️ {APP_NAME}")
 
     if nav == "Datos Vuelo":
         render_flight_data()

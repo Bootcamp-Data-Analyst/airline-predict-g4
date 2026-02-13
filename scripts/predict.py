@@ -13,14 +13,9 @@ logger = logging.getLogger(__name__)
 
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-try:
-    from scripts.model_utils import load_model
-    from scripts.preprocess import preprocess_for_prediction, decode_target, load_preprocessor
-    from scripts.paths import MODEL_PATH
-except ImportError:
-    from model_utils import load_model
-    from preprocess import preprocess_for_prediction, decode_target, load_preprocessor
-    from paths import MODEL_PATH
+from scripts.model_utils import load_model
+from scripts.preprocess import preprocess_for_prediction, decode_target, load_preprocessor
+from scripts.paths import MODEL_PATH
 
 def predict_satisfaction(user_data, model=None, preprocessor=None):
     try:
