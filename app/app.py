@@ -5,31 +5,59 @@ import os
 import logging
 from typing import Dict, Any, Optional, Tuple
 
-# Configuration
-APP_NAME = "Airline Predict"
-MODEL_VERSION = "v1.0"
-
-# Setup logging
-logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
-logger = logging.getLogger(__name__)
-
-# Add project root
-project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
-if project_root not in sys.path:
-    sys.path.append(project_root)
-
-# Import prediction logic
+# NOTE: `predict` is provided by the modeling/pipeline workstream.
+# Right now I’m wiring the UI to the expected entry point, and we’ll adapt
+# the input schema/return format once the final pipeline contract is confirmed.
+# NOTE: `predict` is provided by the modeling/pipeline workstream.
+# Right now I’m wiring the UI to the expected entry point, and we’ll adapt
+# the input schema/return format once the final pipeline contract is confirmed.
 try:
-    from scripts.predict import predict_satisfaction
-except ImportError as e:
-    logger.error(f"Failed to import scripts.predict: {e}", exc_info=True)
-    # Showing the specific error in the UI to help debugging
-    st.error(f"⚠️ Error cargando modelo: {e}. Verifique logs.")
-    def predict_satisfaction(data):
-        return {"prediction": "Error", "probability_satisfied": 0.0, "probability_dissatisfied": 0.0}
+    from scripts.predict import predict_with_probability
+
+    def predict(data):
+        """
+        Wrapper to adapt the UI contract to the script contract.
+        UI expects: {prediction, confidence, average_csat, top_drivers}
+        Script returns: {prediction, prediction_numeric, probability_satisfied, probability_dissatisfied}
+        """
+        # Convert DataFrame to dict if necessary (though script handles both, dict is safer for single row)
+        if hasattr(data, "to_dict"):
+            data = data.to_dict(orient="records")[0]
+            
+        result = predict_with_probability(data)
+        
+        # Map response keys
+        pred_label = result.get("prediction", "Unknown")
+        
+        # Calculate confidence based on the predicted class
+        if pred_label == 'satisfied':
+            conf = result.get("probability_satisfied", 0.0)
+        else:
+            conf = result.get("probability_dissatisfied", 0.0)
+            
+        return {
+            "prediction": pred_label,
+            "confidence": conf,
+            "average_csat": None, # Not calculated by model yet
+            "top_drivers": []     # Not returned by model yet
+        }
+
+except ImportError:
+    # Fallback for development if scripts module is not found or predict is missing
+    def predict(data):
+        return {"prediction": "Mock Prediction", "confidence": 0.0, "average_csat": 0.0}
 
 
-# Constants
+# =============================================================================
+# UX / Copy constants (kept here to keep the UI consistent and easy to tweak)
+# =============================================================================
+
+APP_NAME = "Airline Predict"
+MODEL_BADGE = "Model v1 — Classification"
+
+# CSAT semantics (1–5). We also support 0 = Not applicable.
+# IMPORTANT: 0 is NOT a “bad score”. In airline survey datasets it typically means:
+# “Not used / Not rated / Not applicable”.
 CSAT_LABELS = {
     1: "Muy insatisfecho", 2: "Insatisfecho", 3: "Neutral",
     4: "Satisfecho", 5: "Muy satisfecho", 0: "No aplicable",
@@ -219,41 +247,81 @@ def render_evaluation():
                 st.divider()
     st.markdown("</div>", unsafe_allow_html=True)
 
-    c1, c2 = st.columns([1, 1])
-    with c1:
-        if st.button("Atrás"):
-            st.session_state["nav"] = "Datos Vuelo"
-            st.rerun()
-    with c2:
-        if st.button("Ejecutar Predicción", type="primary"):
-            st.session_state["nav"] = "Resultados"
-            st.rerun()
 
-def render_results():
-    st.markdown("<div class='ap-card'><div class='ap-card-title'>Predicción</div>", unsafe_allow_html=True)
-    
-    # Auto-run prediction on load
-    with st.spinner("Analizando datos..."):
-        try:
-            data = get_passenger_data()
-            result = predict_satisfaction(data)
-            
-            c1, c2 = st.columns(2)
-            pred = result.get("prediction", "Error")
-            prob = result.get("probability_satisfied", 0.0)
-            
-            with c1:
-                color = "green" if pred == "satisfied" else "red"
-                text = "Satisfecho" if pred == "satisfied" else "Insatisfecho/Neutral"
-                st.markdown(f"<h2 style='color: {color};'>{text}</h2>", unsafe_allow_html=True)
-            
-            with c2:
-                st.metric("Probabilidad Satisfacción", f"{prob:.1%}")
-                st.progress(prob)
-            
-        except Exception as e:
-            st.error(f"Error en predicción: {str(e)}")
-            logger.error(e)
+def render_prediction_result() -> None:
+    st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
+    st.markdown("<div class='ap-card-title'>Resultado de Predicción</div>", unsafe_allow_html=True)
+    st.markdown(
+        "<div class='ap-card-subtitle'>Salida del modelo y factores clave. Use esto para priorizar mejoras de CX.</div>",
+        unsafe_allow_html=True,
+    )
+
+    valid, msg = validate_inputs()
+    if not valid:
+        st.warning(msg)
+        st.markdown("</div>", unsafe_allow_html=True)
+        return
+
+    # Build input row (encoding/scaling/missing handling happens in the pipeline)
+    X_input = build_input_dataframe()
+
+    try:
+        # NOTE: This is the integration point.
+        # When the modeling team finalizes the pipeline, we’ll align:
+        #   - expected feature names
+        #   - missing value treatment (0 -> N/A, None -> missing)
+        #   - return format (label + proba + drivers)
+        result = predict(X_input)
+
+        # For now I handle both:
+        #  - a dict contract (recommended)
+        #  - a simple label (fallback)
+        if isinstance(result, dict):
+            pred = result.get("prediction", "—")
+            conf = result.get("confidence", None)  # expected 0..1
+            csat_avg = result.get("average_csat", None)
+            drivers = result.get("top_drivers", [])
+        else:
+            pred = str(result)
+            conf = None
+            csat_avg, _, _ = compute_live_csat(st.session_state["ratings"])
+            drivers = []
+
+        c1, c2, c3 = st.columns([1.2, 1.0, 1.2])
+        with c1:
+            st.metric("Predicción", pred)
+        with c2:
+            if conf is None:
+                st.metric("Confianza", "—")
+            else:
+                st.metric("Confianza", f"{int(round(conf * 100))}%")
+                st.progress(min(max(conf, 0.0), 1.0))
+        with c3:
+            if csat_avg is None:
+                st.metric("CSAT Promedio", "—")
+            else:
+                st.metric("CSAT Promedio", f"{csat_avg} / 5")
+
+        st.divider()
+        st.subheader("Factores principales (explicabilidad)")
+        if drivers:
+            for d in drivers[:5]:
+                st.write(f"• {d}")
+        else:
+            st.caption(
+                "Los insights de factores aparecerán aquí una vez que el pipeline exponga la importancia de características / salidas SHAP. "
+                "La UI ya está preparada para ello."
+            )
+
+        st.success("Predicción generada. Puede ajustar las calificaciones para probar diferentes escenarios.")
+
+    except Exception:
+        # NOTE: Keeping the error message user-friendly.
+        # The technical traceback can be added later to logs if we want.
+        st.error(
+            "No pudimos generar una predicción con la configuración actual. "
+            "Por favor intente de nuevo, o verifique que el pipeline del modelo esté conectado y funcionando."
+        )
 
     st.markdown("</div>", unsafe_allow_html=True)
     
