@@ -168,11 +168,16 @@ def get_passenger_data() -> pd.DataFrame:
 
 
 
-# =============================================================================
-# UI sections (split so we can iterate without breaking everything)
-# =============================================================================
 
 def render_sidebar():
+    # Logo
+    try:
+        logo_path = os.path.join(project_root, "assets", "logo.svg")
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, use_container_width=True)
+    except Exception:
+        pass
+
     st.sidebar.title(APP_NAME)
     st.sidebar.caption(f"Modelo {MODEL_VERSION}")
     
@@ -282,6 +287,15 @@ def main():
     inject_css()
     init_state()
     render_sidebar()
+
+    # Main content
+    # Banner
+    try:
+        banner_path = os.path.join(project_root, "assets", "banner.svg")
+        if os.path.exists(banner_path):
+             st.image(banner_path, use_container_width=True)
+    except Exception:
+        pass
 
     nav = st.session_state["nav"]
     st.title(f"✈️ {APP_NAME}")
