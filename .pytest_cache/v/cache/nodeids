@@ -1,0 +1,10 @@
+[
+  "tests/test_predict.py::TestPredict::test_predict_with_probability_dissatisfied",
+  "tests/test_predict.py::TestPredict::test_predict_with_probability_structure",
+  "tests/test_preprocess.py::TestPreprocess::test_clean_data",
+  "tests/test_preprocess.py::TestPreprocess::test_clean_data_duplicates",
+  "tests/test_preprocess.py::TestPreprocess::test_create_preprocessing_pipeline",
+  "tests/test_preprocess.py::TestPreprocess::test_preprocess_for_prediction",
+  "tests/test_preprocess.py::TestPreprocess::test_preprocess_for_training",
+  "tests/test_preprocess.py::TestPreprocess::test_target_encoding"
+]
