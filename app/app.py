@@ -174,7 +174,7 @@ def render_sidebar():
     try:
         logo_path = os.path.join(project_root, "assets", "logo.svg")
         if os.path.exists(logo_path):
-            st.sidebar.image(logo_path, use_container_width=True)
+            st.sidebar.image(logo_path, use_column_width=True)
     except Exception:
         pass
 
@@ -293,7 +293,7 @@ def main():
     try:
         banner_path = os.path.join(project_root, "assets", "banner.svg")
         if os.path.exists(banner_path):
-             st.image(banner_path, use_container_width=True)
+             st.image(banner_path, use_column_width=True)
     except Exception:
         pass
 
