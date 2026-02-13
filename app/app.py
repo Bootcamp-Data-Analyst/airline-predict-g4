@@ -23,7 +23,8 @@ try:
     from scripts.predict import predict_satisfaction
 except ImportError as e:
     logger.error(f"Failed to import scripts.predict: {e}", exc_info=True)
-    st.error("⚠️ Error cargando modelo. Verifique logs.")
+    # Showing the specific error in the UI to help debugging
+    st.error(f"⚠️ Error cargando modelo: {e}. Verifique logs.")
     def predict_satisfaction(data):
         return {"prediction": "Error", "probability_satisfied": 0.0, "probability_dissatisfied": 0.0}
 
@@ -198,6 +199,10 @@ def render_flight_data():
         st.session_state["arrival_delay"] = st.number_input("Retraso Llegada (min)", 0, value=st.session_state["arrival_delay"])
     
     st.markdown("</div>", unsafe_allow_html=True)
+    
+    if st.button("Siguiente: Evaluación de Servicio", type="primary"):
+        st.session_state["nav"] = "Evaluación"
+        st.rerun()
 
 def render_evaluation():
     st.markdown("<div class='ap-card'><div class='ap-card-title'>Evaluación de Servicio</div>", unsafe_allow_html=True)
@@ -214,33 +219,48 @@ def render_evaluation():
                 st.divider()
     st.markdown("</div>", unsafe_allow_html=True)
 
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("Atrás"):
+            st.session_state["nav"] = "Datos Vuelo"
+            st.rerun()
+    with c2:
+        if st.button("Ejecutar Predicción", type="primary"):
+            st.session_state["nav"] = "Resultados"
+            st.rerun()
+
 def render_results():
     st.markdown("<div class='ap-card'><div class='ap-card-title'>Predicción</div>", unsafe_allow_html=True)
     
-    if st.button("Calcular Satisfacción", type="primary"):
-        with st.spinner("Analizando..."):
-            try:
-                data = get_passenger_data()
-                result = predict_satisfaction(data)
-                
-                c1, c2 = st.columns(2)
-                pred = result.get("prediction", "Error")
-                prob = result.get("probability_satisfied", 0.0)
-                
-                with c1:
-                    color = "green" if pred == "satisfied" else "red"
-                    label = "Satisfecho" if pred == "satisfied" else "Insatisfecho/Neutral"
-                    st.markdown(f"<h2 style='color: {color};'>{label}</h2>", unsafe_allow_html=True)
-                
-                with c2:
-                    st.metric("Probabilidad Satisfacción", f"{prob:.1%}")
-                    st.progress(prob)
-                
-            except Exception as e:
-                st.error(f"Error en predicción: {str(e)}")
-                logger.error(e)
+    # Auto-run prediction on load
+    with st.spinner("Analizando datos..."):
+        try:
+            data = get_passenger_data()
+            result = predict_satisfaction(data)
+            
+            c1, c2 = st.columns(2)
+            pred = result.get("prediction", "Error")
+            prob = result.get("probability_satisfied", 0.0)
+            
+            with c1:
+                color = "green" if pred == "satisfied" else "red"
+                text = "Satisfecho" if pred == "satisfied" else "Insatisfecho/Neutral"
+                st.markdown(f"<h2 style='color: {color};'>{text}</h2>", unsafe_allow_html=True)
+            
+            with c2:
+                st.metric("Probabilidad Satisfacción", f"{prob:.1%}")
+                st.progress(prob)
+            
+        except Exception as e:
+            st.error(f"Error en predicción: {str(e)}")
+            logger.error(e)
 
     st.markdown("</div>", unsafe_allow_html=True)
+    
+    if st.button("Reiniciar Formulario"):
+        st.session_state.clear()
+        st.rerun()
+
 
 def main():
     st.set_page_config(page_title=APP_NAME, layout="centered")
