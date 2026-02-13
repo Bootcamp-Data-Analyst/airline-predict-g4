@@ -112,6 +112,44 @@ def get_recent_predictions(n=100, db_path=None):
     return rows
 
 
+def insert_prediction(input_data: dict, prediction_text: str, prob_satisfied: float, prob_dissatisfied: float, db_path=None):
+    """
+    Inserts a new prediction record into the database.
+    
+    Args:
+        input_data (dict): The user input features.
+        prediction_text (str): The predicted class label.
+        prob_satisfied (float): Probability of being satisfied.
+        prob_dissatisfied (float): Probability of being dissatisfied.
+        db_path (str): Optional path to DB.
+    """
+    import json
+    
+    if db_path is None:
+        db_path = str(DB_PATH)
+        
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    
+    try:
+        # Convert input dict to JSON string for storage
+        input_json = json.dumps(input_data)
+        
+        cursor.execute(
+            '''
+            INSERT INTO predictions (input_data, prediction, probability_satisfied, probability_dissatisfied)
+            VALUES (?, ?, ?, ?)
+            ''',
+            (input_json, prediction_text, prob_satisfied, prob_dissatisfied)
+        )
+        conn.commit()
+        print(f" Prediction saved to DB: {prediction_text}")
+    except Exception as e:
+        print(f" Error saving prediction: {e}")
+    finally:
+        conn.close()
+
+
 if __name__ == "__main__":
     print("=" * 50)
     print("DATABASE MODULE TEST")
