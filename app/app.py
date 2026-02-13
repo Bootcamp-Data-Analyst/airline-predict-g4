@@ -4,9 +4,12 @@ import sys
 import os
 from typing import Dict, Any, Optional, Tuple
 
-# NOTE: `predict` is provided by the modeling/pipeline workstream.
-# Right now I’m wiring the UI to the expected entry point, and we’ll adapt
-# the input schema/return format once the final pipeline contract is confirmed.
+# Add project root to path so we can import 'scripts'
+current_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.abspath(os.path.join(current_dir, '..'))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
 # NOTE: `predict` is provided by the modeling/pipeline workstream.
 # Right now I’m wiring the UI to the expected entry point, and we’ll adapt
 # the input schema/return format once the final pipeline contract is confirmed.
@@ -41,8 +44,9 @@ try:
             "top_drivers": []     # Not returned by model yet
         }
 
-except ImportError:
+except ImportError as e:
     # Fallback for development if scripts module is not found or predict is missing
+    st.error(f"⚠️ Error cargando el modelo de predicción: {e}")
     def predict(data):
         return {"prediction": "Mock Prediction", "confidence": 0.0, "average_csat": 0.0}
 
