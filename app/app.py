@@ -509,12 +509,20 @@ def build_input_dataframe() -> pd.DataFrame:
     NOTE: column names may need to be adjusted once the final pipeline expects
     snake_case vs original dataset labels. I’m keeping a clear mapping here so it’s easy to swap.
     """
+    # Helper mapping for translation (UI Spanish -> Model English)
+    ui_map = {
+        "Mujer": "Female", "Hombre": "Male",
+        "Cliente Leal": "Loyal Customer", "Cliente Desleal": "Disloyal Customer",
+        "Viaje de negocios": "Business travel", "Viaje personal": "Personal travel",
+        "Business": "Business", "Eco": "Eco", "Eco Plus": "Eco Plus" 
+    }
+
     row: Dict[str, Any] = {
-        "Gender": st.session_state["gender"],
-        "Customer Type": st.session_state["customer_type"],
+        "Gender": ui_map.get(st.session_state["gender"], st.session_state["gender"]),
+        "Customer Type": ui_map.get(st.session_state["customer_type"], st.session_state["customer_type"]),
         "Age": st.session_state["age"],
-        "Type of Travel": st.session_state["type_of_travel"],
-        "Class": st.session_state["class"],
+        "Type of Travel": ui_map.get(st.session_state["type_of_travel"], st.session_state["type_of_travel"]),
+        "Class": ui_map.get(st.session_state["class"], st.session_state["class"]),
         "Flight distance": st.session_state["flight_distance"],
         "Departure Delay in Minutes": st.session_state["departure_delay"],
         "Arrival Delay in Minutes": st.session_state["arrival_delay"],
@@ -634,13 +642,13 @@ def render_flight_inputs() -> None:
         st.session_state["customer_type"] = st.selectbox(
             "Tipo de cliente",
             options=["Cliente Leal", "Cliente Desleal"],
-            index=0 if st.session_state["customer_type"] is None else ["Loyal Customer", "Disloyal Customer"].index(st.session_state["customer_type"]),
+            index=0 if st.session_state["customer_type"] is None else ["Cliente Leal", "Cliente Desleal"].index(st.session_state["customer_type"]),
             help="Estado de relación con el cliente.",
         )
         st.session_state["type_of_travel"] = st.radio(
             "Tipo de viaje",
             options=["Viaje de negocios", "Viaje personal"],
-            index=0 if st.session_state["type_of_travel"] is None else ["Business travel", "Personal travel"].index(st.session_state["type_of_travel"]),
+            index=0 if st.session_state["type_of_travel"] is None else ["Viaje de negocios", "Viaje personal"].index(st.session_state["type_of_travel"]),
             horizontal=True,
         )
         st.session_state["flight_distance"] = st.number_input(
