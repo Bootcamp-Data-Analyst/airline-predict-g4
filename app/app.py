@@ -5,30 +5,12 @@ import os
 import logging
 from typing import Dict, Any, Optional, Tuple
 
-# NOTE: `predict` is provided by the modeling/pipeline workstream.
-# Right now I’m wiring the UI to the expected entry point, and we’ll adapt
-# the input schema/return format once the final pipeline contract is confirmed.
-# NOTE: `predict` is provided by the modeling/pipeline workstream.
-# Right now I’m wiring the UI to the expected entry point, and we’ll adapt
-# the input schema/return format once the final pipeline contract is confirmed.
-try:
-    from scripts.predict import predict_with_probability
-
-    def predict(data):
-        """
-        Wrapper to adapt the UI contract to the script contract.
-        UI expects: {prediction, confidence, average_csat, top_drivers}
-        Script returns: {prediction, prediction_numeric, probability_satisfied, probability_dissatisfied}
-        """
-        # Convert DataFrame to dict if necessary (though script handles both, dict is safer for single row)
-        if hasattr(data, "to_dict"):
-            data = data.to_dict(orient="records")[0]
 # Configuration
 APP_NAME = "Airline Predict"
 MODEL_VERSION = "v1.0"
 
 # Setup logging
-logging.basicConfig(level=logging.logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
 logger = logging.getLogger(__name__)
 
 # Add project root
@@ -50,9 +32,7 @@ except ImportError as e:
         pass
 
 
-# CSAT semantics (1–5). We also support 0 = Not applicable.
-# IMPORTANT: 0 is NOT a “bad score”. In airline survey datasets it typically means:
-# “Not used / Not rated / Not applicable”.
+# Constants
 CSAT_LABELS = {
     1: "Muy insatisfecho", 2: "Insatisfecho", 3: "Neutral",
     4: "Satisfecho", 5: "Muy satisfecho", 0: "No aplicable",
@@ -242,27 +222,53 @@ def render_evaluation():
                 st.divider()
     st.markdown("</div>", unsafe_allow_html=True)
 
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("Atrás"):
+            st.session_state["nav"] = "Datos Vuelo"
+            st.rerun()
+    with c2:
+        if st.button("Ejecutar Predicción", type="primary"):
+            st.session_state["nav"] = "Resultados"
+            st.rerun()
 
-        st.divider()
-        st.subheader("Factores principales (explicabilidad)")
-        if drivers:
-            for d in drivers[:5]:
-                st.write(f"• {d}")
-        else:
-            st.caption(
-                "Los insights de factores aparecerán aquí una vez que el pipeline exponga la importancia de características / salidas SHAP. "
-                "La UI ya está preparada para ello."
-            )
-
-        st.success("Predicción generada. Puede ajustar las calificaciones para probar diferentes escenarios.")
-
-    except Exception:
-        # NOTE: Keeping the error message user-friendly.
-        # The technical traceback can be added later to logs if we want.
-        st.error(
-            "No pudimos generar una predicción con la configuración actual. "
-            "Por favor intente de nuevo, o verifique que el pipeline del modelo esté conectado y funcionando."
-        )
+def render_results():
+    st.markdown("<div class='ap-card'><div class='ap-card-title'>Predicción</div>", unsafe_allow_html=True)
+    
+    # Auto-run prediction on load
+    with st.spinner("Analizando datos..."):
+        try:
+            data = get_passenger_data()
+            result = predict_satisfaction(data)
+            
+            c1, c2 = st.columns(2)
+            pred = result.get("prediction", "Error")
+            prob = result.get("probability_satisfied", 0.0)
+            
+            with c1:
+                color = "green" if pred == "satisfied" else "red"
+                text = "Satisfecho" if pred == "satisfied" else "Insatisfecho/Neutral"
+                st.markdown(f"<h2 style='color: {color};'>{text}</h2>", unsafe_allow_html=True)
+            
+            with c2:
+                st.metric("Probabilidad Satisfacción", f"{prob:.1%}")
+                st.progress(prob)
+            
+            # Save to Database
+            if pred != "Error":
+                try:
+                    insert_prediction(
+                        input_data=data.to_dict(orient='records')[0],
+                        prediction_text=pred,
+                        prob_satisfied=prob,
+                        prob_dissatisfied=result.get("probability_dissatisfied", 0.0)
+                    )
+                except Exception as db_e:
+                    logger.error(f"Failed to save to DB: {db_e}")
+            
+        except Exception as e:
+            st.error(f"Error en predicción: {str(e)}")
+            logger.error(e)
 
     st.markdown("</div>", unsafe_allow_html=True)
     
@@ -289,4 +295,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
