@@ -6,6 +6,16 @@ Used by the Streamlit App (Rocio P) to predict passenger satisfaction.
 import numpy as np
 import os
 import sys
+import logging
+
+# Configure logging (will use app's config if imported, or this if run directly)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
 try:
@@ -39,11 +49,14 @@ def predict_with_probability(user_data, model=None, preprocessor=None):
     try:
         # Load model and preprocessor if not provided
         if model is None:
+            logger.info("Model not provided, loading from disk...")
             model = load_model()
         if preprocessor is None:
+            logger.info("Preprocessor not provided, loading from disk...")
             preprocessor = load_preprocessor()
 
         # Preprocess the user input
+        logger.debug(f"Preprocessing data: {user_data}")
         X = preprocess_for_prediction(user_data, preprocessor)
 
         # Predict class
@@ -62,13 +75,13 @@ def predict_with_probability(user_data, model=None, preprocessor=None):
             'probability_dissatisfied': float(probabilities[0])
         }
 
-        print(
-            f" Prediction: {prediction_text} "
+        logger.info(
+            f"Prediction: {prediction_text} "
             f"(satisfied: {probabilities[1]:.1%}, dissatisfied: {probabilities[0]:.1%})"
         )
         return result
     except Exception as e:
-        print(f" Error in prediction: {e}")
+        logger.error(f"Error in prediction: {e}", exc_info=True)
         return {
             'prediction': 'error',
             'prediction_numeric': -1,
@@ -96,7 +109,7 @@ def predict_batch(X, model=None):
 if __name__ == "__main__":
     # Check if model exists, train if not
     if not os.path.exists(str(MODEL_PATH)):
-        print(" No model found. Training first...")
+        logger.warning("No model found. Training first...")
         from scripts.train_model import train_model
         train_model()
 

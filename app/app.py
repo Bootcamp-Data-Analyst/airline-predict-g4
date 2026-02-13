@@ -4,17 +4,29 @@ import sys
 import os
 from typing import Dict, Any, Optional, Tuple
 
+import logging
+
+# Configure logging to output to console (stderr)
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+    handlers=[logging.StreamHandler(sys.stdout)]
+)
+logger = logging.getLogger(__name__)
+
 # Add project root to path so we can import 'scripts'
 current_dir = os.path.dirname(os.path.abspath(__file__))
 project_root = os.path.abspath(os.path.join(current_dir, '..'))
 if project_root not in sys.path:
     sys.path.append(project_root)
+    logger.info(f"Added project root to sys.path: {project_root}")
 
 # NOTE: `predict` is provided by the modeling/pipeline workstream.
 # Right now I’m wiring the UI to the expected entry point, and we’ll adapt
 # the input schema/return format once the final pipeline contract is confirmed.
 try:
     from scripts.predict import predict_with_probability
+    logger.info("Successfully imported scripts.predict")
 
     def predict(data):
         """
@@ -22,30 +34,37 @@ try:
         UI expects: {prediction, confidence, average_csat, top_drivers}
         Script returns: {prediction, prediction_numeric, probability_satisfied, probability_dissatisfied}
         """
-        # Convert DataFrame to dict if necessary (though script handles both, dict is safer for single row)
-        if hasattr(data, "to_dict"):
-            data = data.to_dict(orient="records")[0]
+        try:
+            # Convert DataFrame to dict if necessary (though script handles both, dict is safer for single row)
+            if hasattr(data, "to_dict"):
+                data = data.to_dict(orient="records")[0]
             
-        result = predict_with_probability(data)
-        
-        # Map response keys
-        pred_label = result.get("prediction", "Unknown")
-        
-        # Calculate confidence based on the predicted class
-        if pred_label == 'satisfied':
-            conf = result.get("probability_satisfied", 0.0)
-        else:
-            conf = result.get("probability_dissatisfied", 0.0)
+            logger.info(f"Predicting for data: {data}")
+            result = predict_with_probability(data)
+            logger.info(f"Prediction result: {result}")
             
-        return {
-            "prediction": pred_label,
-            "confidence": conf,
-            "average_csat": None, # Not calculated by model yet
-            "top_drivers": []     # Not returned by model yet
-        }
+            # Map response keys
+            pred_label = result.get("prediction", "Unknown")
+            
+            # Calculate confidence based on the predicted class
+            if pred_label == 'satisfied':
+                conf = result.get("probability_satisfied", 0.0)
+            else:
+                conf = result.get("probability_dissatisfied", 0.0)
+                
+            return {
+                "prediction": pred_label,
+                "confidence": conf,
+                "average_csat": None, # Not calculated by model yet
+                "top_drivers": []     # Not returned by model yet
+            }
+        except Exception as e:
+            logger.error(f"Error during prediction wrapper execution: {e}", exc_info=True)
+            raise e
 
 except ImportError as e:
     # Fallback for development if scripts module is not found or predict is missing
+    logger.error(f"Failed to import scripts.predict: {e}", exc_info=True)
     st.error(f"⚠️ Error cargando el modelo de predicción: {e}")
     def predict(data):
         return {"prediction": "Mock Prediction", "confidence": 0.0, "average_csat": 0.0}
