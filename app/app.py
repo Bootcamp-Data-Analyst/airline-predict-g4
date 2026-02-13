@@ -183,7 +183,7 @@ def render_sidebar():
     except Exception:
         pass
 
-    st.sidebar.title(APP_NAME)
+    # nav radio
     st.sidebar.caption(f"Modelo {MODEL_VERSION}")
     
     opts = ["Datos Vuelo", "Evaluación", "Resultados"]
@@ -303,7 +303,6 @@ def main():
         pass
 
     nav = st.session_state["nav"]
-    # st.title(f"✈️ {APP_NAME}")
 
     if nav == "Datos Vuelo":
         render_flight_data()
