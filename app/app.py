@@ -546,7 +546,7 @@ def build_input_dataframe() -> pd.DataFrame:
         "Age": st.session_state["age"],
         "Type of Travel": ui_map.get(st.session_state["type_of_travel"], st.session_state["type_of_travel"]),
         "Class": ui_map.get(st.session_state["class"], st.session_state["class"]),
-        "Flight distance": st.session_state["flight_distance"],
+        "Flight Distance": st.session_state["flight_distance"],
         "Departure Delay in Minutes": st.session_state["departure_delay"],
         "Arrival Delay in Minutes": st.session_state["arrival_delay"],
     }
@@ -558,7 +558,7 @@ def build_input_dataframe() -> pd.DataFrame:
         "online_boarding": "Online boarding",
         "departure_arrival_time_convenient": "Departure/Arrival time convenient",
         "gate_location": "Gate location",
-        "checkin_service": "Check-in service",
+        "checkin_service": "Checkin service",
         "baggage_handling": "Baggage handling",
         "seat_comfort": "Seat comfort",
         "leg_room_service": "Leg room service",
