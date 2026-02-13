@@ -23,37 +23,32 @@ try:
         # Convert DataFrame to dict if necessary (though script handles both, dict is safer for single row)
         if hasattr(data, "to_dict"):
             data = data.to_dict(orient="records")[0]
-            
-        result = predict_with_probability(data)
-        
-        # Map response keys
-        pred_label = result.get("prediction", "Unknown")
-        
-        # Calculate confidence based on the predicted class
-        if pred_label == 'satisfied':
-            conf = result.get("probability_satisfied", 0.0)
-        else:
-            conf = result.get("probability_dissatisfied", 0.0)
-            
-        return {
-            "prediction": pred_label,
-            "confidence": conf,
-            "average_csat": None, # Not calculated by model yet
-            "top_drivers": []     # Not returned by model yet
-        }
-
-except ImportError:
-    # Fallback for development if scripts module is not found or predict is missing
-    def predict(data):
-        return {"prediction": "Mock Prediction", "confidence": 0.0, "average_csat": 0.0}
-
-
-# =============================================================================
-# UX / Copy constants (kept here to keep the UI consistent and easy to tweak)
-# =============================================================================
-
+# Configuration
 APP_NAME = "Airline Predict"
-MODEL_BADGE = "Model v1 — Classification"
+MODEL_VERSION = "v1.0"
+
+# Setup logging
+logging.basicConfig(level=logging.logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
+logger = logging.getLogger(__name__)
+
+# Add project root
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Import prediction logic
+try:
+    from scripts.predict import predict_satisfaction
+    from scripts.database import insert_prediction
+except ImportError as e:
+    logger.error(f"Failed to import scripts: {e}", exc_info=True)
+    # Showing the specific error in the UI to help debugging
+    st.error(f"⚠️ Error cargando componentes: {e}. Verifique logs.")
+    def predict_satisfaction(data):
+        return {"prediction": "Error", "probability_satisfied": 0.0, "probability_dissatisfied": 0.0}
+    def insert_prediction(*args, **kwargs):
+        pass
+
 
 # CSAT semantics (1–5). We also support 0 = Not applicable.
 # IMPORTANT: 0 is NOT a “bad score”. In airline survey datasets it typically means:
@@ -247,60 +242,6 @@ def render_evaluation():
                 st.divider()
     st.markdown("</div>", unsafe_allow_html=True)
 
-
-def render_prediction_result() -> None:
-    st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='ap-card-title'>Resultado de Predicción</div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='ap-card-subtitle'>Salida del modelo y factores clave. Use esto para priorizar mejoras de CX.</div>",
-        unsafe_allow_html=True,
-    )
-
-    valid, msg = validate_inputs()
-    if not valid:
-        st.warning(msg)
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    # Build input row (encoding/scaling/missing handling happens in the pipeline)
-    X_input = build_input_dataframe()
-
-    try:
-        # NOTE: This is the integration point.
-        # When the modeling team finalizes the pipeline, we’ll align:
-        #   - expected feature names
-        #   - missing value treatment (0 -> N/A, None -> missing)
-        #   - return format (label + proba + drivers)
-        result = predict(X_input)
-
-        # For now I handle both:
-        #  - a dict contract (recommended)
-        #  - a simple label (fallback)
-        if isinstance(result, dict):
-            pred = result.get("prediction", "—")
-            conf = result.get("confidence", None)  # expected 0..1
-            csat_avg = result.get("average_csat", None)
-            drivers = result.get("top_drivers", [])
-        else:
-            pred = str(result)
-            conf = None
-            csat_avg, _, _ = compute_live_csat(st.session_state["ratings"])
-            drivers = []
-
-        c1, c2, c3 = st.columns([1.2, 1.0, 1.2])
-        with c1:
-            st.metric("Predicción", pred)
-        with c2:
-            if conf is None:
-                st.metric("Confianza", "—")
-            else:
-                st.metric("Confianza", f"{int(round(conf * 100))}%")
-                st.progress(min(max(conf, 0.0), 1.0))
-        with c3:
-            if csat_avg is None:
-                st.metric("CSAT Promedio", "—")
-            else:
-                st.metric("CSAT Promedio", f"{csat_avg} / 5")
 
         st.divider()
         st.subheader("Factores principales (explicabilidad)")
