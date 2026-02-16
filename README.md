@@ -152,4 +152,7 @@ Resultados obtenidos por el modelo final (**Optuna Optimized**):
 | **Mariana Moreno** | Scrum Master | [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/mariana-moreno-henao/) |
 
 ---
-*Factoría F5 y ha sido diseñado bajo estándares de calidad profesional.*
+<p align="center">
+  <b>Factoría F5</b><br>
+  <i>Proyecto diseñado para el <b>Bootcamp Data Analyst</b> bajo estándares de calidad profesional.</i>
+</p>
