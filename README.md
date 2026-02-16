@@ -4,9 +4,10 @@
 
 Proyecto de Machine Learning para la clasificación de la satisfacción de pasajeros utilizando el **Airline Passenger Satisfaction Dataset**. Implementa un pipeline completo desde el Análisis Exploratorio de Datos (EDA) hasta el despliegue de una aplicación interactiva en contenedores.
 
-![Python](https://img.shields.io/badge/Python-3.8+-blue.svg)
-![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.0+-orange.svg)
-![Streamlit](https://img.shields.io/badge/Streamlit-1.10+-red.svg)
+[![Streamlit App](https://static.streamlit.io/badges/streamlit_badge_black_white.svg)](https://airline-predict-dsz58jrfx2hunst4vns9xl.streamlit.app/)
+![Python](https://img.shields.io/badge/Python-3.11-blue.svg)
+![Scikit-Learn](https://img.shields.io/badge/Scikit--Learn-1.2+-orange.svg)
+![Streamlit](https://img.shields.io/badge/Streamlit-1.31+-red.svg)
 ![Docker](https://img.shields.io/badge/Docker-Enabled-blue)
 ![License](https://img.shields.io/badge/License-MIT-green.svg)
 

@@ -44,9 +44,12 @@ LOGS_DIR = PROJECT_ROOT / "logs"
 REPORTS_DIR = PROJECT_ROOT / "reports"
 
 # Ensure critical directories exist
-
-for directory in [RAW_DATA_DIR, PROCESSED_DATA_DIR, MODELS_DIR, LOGS_DIR]:
-    directory.mkdir(parents=True, exist_ok=True)
+try:
+    for directory in [RAW_DATA_DIR, PROCESSED_DATA_DIR, MODELS_DIR, LOGS_DIR]:
+        directory.mkdir(parents=True, exist_ok=True)
+except Exception:
+    # Fail silently if we can't create dirs (common in cloud environments)
+    pass
 
 if __name__ == "__main__":
     print("Project Paths Configuration")
