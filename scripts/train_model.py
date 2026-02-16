@@ -234,12 +234,13 @@ def train_model():
     
     return final_model
 
-
 if __name__ == "__main__":
     print("=" * 60)
     print("🚀 MODEL TRAINING - AIRLINE SATISFACTION")
     print("=" * 60)
-    train_model()
+    final_model = train_model()
+    # Optional: save locally with a simple name if needed, or rely on save_model above
+    # joblib.dump(final_model, "model_final.pkl") 
     print("\n" + "=" * 60)
     print("✅ TRAINING COMPLETED")
     print("=" * 60)

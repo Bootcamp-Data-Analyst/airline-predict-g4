@@ -2,494 +2,159 @@ import streamlit as st
 import pandas as pd
 import sys
 import os
+import logging
 from typing import Dict, Any, Optional, Tuple
 
-# NOTE: `predict` is provided by the modeling/pipeline workstream.
-# Right now I’m wiring the UI to the expected entry point, and we’ll adapt
-# the input schema/return format once the final pipeline contract is confirmed.
-from src.pipeline.predict import predict
-
-# =============================================================================
-# UX / Copy constants (kept here to keep the UI consistent and easy to tweak)
-# =============================================================================
-
+# Configuration
 APP_NAME = "Airline Predict"
-MODEL_BADGE = "Model v1 — Classification"
+MODEL_VERSION = "v1.0"
 
-# CSAT semantics (1–5). We also support 0 = Not applicable.
-# IMPORTANT: 0 is NOT a “bad score”. In airline survey datasets it typically means:
-# “Not used / Not rated / Not applicable”.
+# Setup logging
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', handlers=[logging.StreamHandler(sys.stdout)])
+logger = logging.getLogger(__name__)
+
+# Add project root
+project_root = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+if project_root not in sys.path:
+    sys.path.append(project_root)
+
+# Import prediction logic
+try:
+    from scripts.predict import predict_satisfaction
+    from scripts.database import insert_prediction
+except ImportError as e:
+    import traceback
+    error_details = traceback.format_exc()
+    logger.error(f"Failed to import scripts: {e}\n{error_details}")
+    # Showing the specific error in the UI to help debugging
+    st.error(f"⚠️ Error cargando componentes: {e}")
+    with st.expander("Ver detalles técnicos"):
+        st.code(error_details)
+    
+    def predict_satisfaction(data):
+        return {"prediction": "Error", "probability_satisfied": 0.0, "probability_dissatisfied": 0.0}
+    def insert_prediction(*args, **kwargs):
+        pass
+
+
+# Constants
 CSAT_LABELS = {
-    1: "Very dissatisfied",
-    2: "Dissatisfied",
-    3: "Neutral",
-    4: "Satisfied",
-    5: "Very satisfied",
-    0: "Not applicable",
+    1: "Muy insatisfecho", 2: "Insatisfecho", 3: "Neutral",
+    4: "Satisfecho", 5: "Muy satisfecho", 0: "No aplicable",
 }
 
-# I grouped the service ratings by passenger journey moments to reduce cognitive load.
-# This matches how CX teams think about the experience (digital → airport → onboard).
 SERVICE_BLOCKS = {
-    "Digital & Time Convenience": {
-        "description": "Rate digital and scheduling experience.",
+    "Digital y Conveniencia": {
+        "description": "Experiencia digital y horarios.",
         "items": [
-            ("inflight_wifi_service", "Inflight Wi-Fi service", "Rate the quality and availability of onboard Wi-Fi."),
-            ("ease_of_online_booking", "Ease of online booking", "Rate how easy it was to book online."),
-            ("online_boarding", "Online boarding", "Rate the digital boarding pass and boarding process."),
-            ("departure_arrival_time_convenient", "Departure/arrival time convenience", "Rate schedule convenience for this trip."),
+            ("inflight_wifi_service", "Wi-Fi a bordo", "Calidad del Wi-Fi."),
+            ("ease_of_online_booking", "Reserva online", "Facilidad de reserva."),
+            ("online_boarding", "Embarque online", "Proceso digital."),
+            ("departure_arrival_time_convenient", "Horarios", "Conveniencia de salida/llegada."),
         ],
     },
-    "Airport Process": {
-        "description": "Rate airport touchpoints.",
+    "Procesos en Aeropuerto": {
+        "description": "Puntos de contacto en aeropuerto.",
         "items": [
-            ("gate_location", "Gate location", "Rate how convenient the gate location was."),
-            ("checkin_service", "Check-in service", "Rate the check-in experience and service quality."),
-            ("baggage_handling", "Baggage handling", "Rate baggage handling efficiency and reliability."),
+            ("gate_location", "Ubicación puerta", "Conveniencia de la puerta."),
+            ("checkin_service", "Check-in", "Servicio en mostrador/kiosco."),
+            ("baggage_handling", "Equipaje", "Manejo de equipaje."),
         ],
     },
-    "Onboard Comfort": {
-        "description": "Rate onboard physical comfort.",
+    "Confort a Bordo": {
+        "description": "Confort físico.",
         "items": [
-            ("seat_comfort", "Seat comfort", "Rate perceived seat comfort during the flight."),
-            ("leg_room_service", "Leg room", "Rate available leg room and overall space."),
-            ("cleanliness", "Cleanliness", "Rate cabin cleanliness and hygiene."),
+            ("seat_comfort", "Asiento", "Comodidad del asiento."),
+            ("leg_room_service", "Espacio piernas", "Espacio disponible."),
+            ("cleanliness", "Limpieza", "Higiene de cabina."),
         ],
     },
-    "Service & Experience": {
-        "description": "Rate service quality and entertainment.",
+    "Servicio y Experiencia": {
+        "description": "Atención y entretenimiento.",
         "items": [
-            ("food_and_drink", "Food and drink", "Rate quality of food and beverages."),
-            ("inflight_entertainment", "Inflight entertainment", "Rate entertainment system and content."),
-            ("onboard_service", "On-board service", "Rate cabin crew service and support."),
-            ("inflight_service", "Inflight service", "Rate overall inflight service quality."),
+            ("food_and_drink", "Comida/Bebida", "Calidad de alimentos."),
+            ("inflight_entertainment", "Entretenimiento", "Sistema de entretenimiento."),
+            ("onboard_service", "Tripulación", "Atención a bordo."),
+            ("inflight_service", "Servicio general", "Calidad general."),
         ],
     },
 }
 
-
-# =============================================================================
-# Styling (clean dashboard feel + clear hierarchy)
-# =============================================================================
-
-def inject_css() -> None:
-    """
-    Lightweight CSS to make Streamlit look more like a clean SaaS dashboard.
-    I’m keeping it minimal so it doesn’t fight with Streamlit defaults.
-    """
-    st.markdown(
-        """
+def inject_css():
+    st.markdown("""
         <style>
-          /* Design tokens (kept small so it's easy to tweak later) */
-          :root{
-            --ap-bg: #ffffff;
-            --ap-surface: #ffffff;
-            --ap-text: rgba(0,0,0,.88);
-            --ap-text-muted: rgba(0,0,0,.62);
-            --ap-border: rgba(0,0,0,.10);
-            --ap-border-strong: rgba(0,0,0,.14);
-            --ap-shadow: 0 10px 30px rgba(0,0,0,.06);
-            --ap-shadow-soft: 0 6px 18px rgba(0,0,0,.06);
-            --ap-radius: 16px;
-            --ap-radius-sm: 12px;
-            --ap-focus: rgba(31,60,136,.28);
-            --ap-accent: #1F3C88;
-            --ap-accent-soft: rgba(31,60,136,.08);
-            --ap-success: rgba(18,125,73,.16);
-            --ap-warning: rgba(176,116,0,.16);
-            --ap-danger: rgba(176,30,30,.16);
-            --ap-font: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+          :root{ --ap-accent: #1F3C88; --ap-radius: 12px; }
+          .stApp { font-family: 'Segoe UI', sans-serif; }
+          .block-container { max-width: 1000px; padding-top: 2rem; }
+          .ap-card { background: #ffffff; padding: 20px; border-radius: var(--ap-radius); box-shadow: 0 4px 12px rgba(0,0,0,0.05); border: 1px solid #eee; margin-bottom: 20px; }
+          .ap-card-title { font-size: 1.1rem; font-weight: 600; margin-bottom: 5px; color: #333; }
+          .ap-card-subtitle { font-size: 0.9rem; color: #666; margin-bottom: 15px; }
+          div.stButton > button { width: 100%; border-radius: 8px; font-weight: 600; }
+          @media (prefers-color-scheme: dark) { 
+            .ap-card { background: #1e1e1e; border-color: #333; } 
+            .ap-card-title { color: #eee; }
+            .ap-card-subtitle { color: #aaa; }
           }
-
-          /* Dark mode support (so the dashboard doesn't break in system dark theme) */
-          @media (prefers-color-scheme: dark){
-            :root{
-              --ap-bg: #0b0f17;
-              --ap-surface: rgba(255,255,255,.06);
-              --ap-text: rgba(255,255,255,.90);
-              --ap-text-muted: rgba(255,255,255,.68);
-              --ap-border: rgba(255,255,255,.12);
-              --ap-border-strong: rgba(255,255,255,.18);
-              --ap-shadow: 0 10px 30px rgba(0,0,0,.35);
-              --ap-shadow-soft: 0 6px 18px rgba(0,0,0,.28);
-              --ap-focus: rgba(120,155,255,.30);
-              --ap-accent: #8FB2FF;
-              --ap-accent-soft: rgba(143,178,255,.12);
-            }
-          }
-
-          /* Base typography + smoothing */
-          html, body, [class*="stApp"]{
-            font-family: var(--ap-font);
-            color: var(--ap-text);
-            text-rendering: optimizeLegibility;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-          }
-
-          /* Layout */
-          .block-container{
-            padding-top: 1.25rem;
-            padding-bottom: 2.5rem;
-            max-width: 1180px;
-          }
-
-          /* Subtle app background so cards feel grounded */
-          [data-testid="stAppViewContainer"]{
-            background: radial-gradient(1200px 600px at 15% 0%, var(--ap-accent-soft), transparent 60%),
-                        radial-gradient(900px 500px at 85% 10%, rgba(0,0,0,.03), transparent 55%),
-                        var(--ap-bg);
-          }
-          @media (prefers-color-scheme: dark){
-            [data-testid="stAppViewContainer"]{
-              background: radial-gradient(1200px 600px at 15% 0%, rgba(143,178,255,.10), transparent 60%),
-                          radial-gradient(900px 500px at 85% 10%, rgba(255,255,255,.04), transparent 55%),
-                          var(--ap-bg);
-            }
-          }
-
-          /* Header badge */
-          .ap-badge{
-            display:inline-flex;
-            align-items:center;
-            gap:.35rem;
-            padding: 0.28rem 0.62rem;
-            border-radius: 999px;
-            font-size: 12px;
-            border: 1px solid color-mix(in srgb, var(--ap-accent) 22%, transparent);
-            background: var(--ap-accent-soft);
-            color: var(--ap-accent);
-            vertical-align: middle;
-            margin-left: 0.5rem;
-            line-height: 1;
-            letter-spacing: .2px;
-          }
-
-          /* Card container */
-          .ap-card{
-            border: 1px solid var(--ap-border);
-            border-radius: var(--ap-radius);
-            padding: 16px 16px 14px 16px;
-            background: var(--ap-surface);
-            box-shadow: var(--ap-shadow-soft);
-            backdrop-filter: saturate(120%) blur(6px);
-          }
-          .ap-card-title{
-            font-size: 16px;
-            font-weight: 650;
-            margin-bottom: 2px;
-            letter-spacing: .2px;
-          }
-          .ap-card-subtitle{
-            color: var(--ap-text-muted);
-            font-size: 13px;
-            margin-bottom: 10px;
-          }
-
-          /* Microcopy */
-          .ap-microcopy{
-            color: var(--ap-text-muted);
-            font-size: 12px;
-            margin-top: -6px;
-            margin-bottom: 8px;
-          }
-
-          /* Streamlit dividers: lighter + more consistent rhythm */
-          hr{
-            border: none !important;
-            height: 1px !important;
-            background: var(--ap-border) !important;
-            margin: .85rem 0 !important;
-          }
-
-          /* Labels and captions: keep readable hierarchy */
-          [data-testid="stCaptionContainer"]{
-            color: var(--ap-text-muted);
-          }
-          label, .stMarkdown p{
-            line-height: 1.45;
-          }
-
-          /* Inputs: consistent radius + focus ring (keyboard accessible) */
-          .stTextInput input,
-          .stNumberInput input,
-          .stSelectbox div[data-baseweb="select"] > div,
-          .stTextArea textarea{
-            border-radius: var(--ap-radius-sm) !important;
-            border-color: var(--ap-border-strong) !important;
-          }
-
-          /* Focus states: visible, not noisy */
-          :is(button, input, textarea, [role="combobox"], [role="radio"], a):focus{
-            outline: none !important;
-          }
-          :is(button, input, textarea, [role="combobox"], a):focus-visible{
-            box-shadow: 0 0 0 4px var(--ap-focus) !important;
-            border-radius: var(--ap-radius-sm);
-          }
-          /* Radio pills can be tricky; at least keep group focus readable */
-          [data-testid="stRadio"] :focus-visible{
-            box-shadow: 0 0 0 4px var(--ap-focus) !important;
-            border-radius: 999px;
-          }
-
-          /* Primary CTA: modern pill, better hover/active, keeps Streamlit kind="primary" */
-          div.stButton > button[kind="primary"]{
-            border-radius: 14px !important;
-            padding: 0.70rem 1.05rem !important;
-            font-weight: 650 !important;
-            border: 1px solid color-mix(in srgb, var(--ap-accent) 35%, transparent) !important;
-            background: linear-gradient(180deg,
-              color-mix(in srgb, var(--ap-accent) 92%, #ffffff 8%),
-              color-mix(in srgb, var(--ap-accent) 78%, #000000 22%)
-            ) !important;
-          }
-          div.stButton > button[kind="primary"]:hover{
-            transform: translateY(-1px);
-            box-shadow: var(--ap-shadow);
-          }
-          div.stButton > button[kind="primary"]:active{
-            transform: translateY(0px);
-            box-shadow: var(--ap-shadow-soft);
-          }
-
-          /* Secondary: link-style button (keeps hierarchy) */
-          .ap-link-btn button{
-            background: transparent !important;
-            border: none !important;
-            color: var(--ap-accent) !important;
-            padding: 0.25rem 0.25rem !important;
-            font-weight: 650 !important;
-            text-decoration: underline;
-            text-underline-offset: 3px;
-          }
-          .ap-link-btn button:hover{
-            opacity: .92;
-          }
-
-          /* Expander: smoother, clearer hit area */
-          details{
-            border-radius: var(--ap-radius) !important;
-            border: 1px solid var(--ap-border) !important;
-            background: color-mix(in srgb, var(--ap-surface) 92%, transparent) !important;
-            box-shadow: none !important;
-            overflow: hidden;
-          }
-          details > summary{
-            padding: .95rem 1rem !important;
-            cursor: pointer;
-            color: var(--ap-text) !important;
-          }
-          details[open] > summary{
-            border-bottom: 1px solid var(--ap-border) !important;
-          }
-
-          /* Sidebar: slightly softer separation */
-          [data-testid="stSidebar"]{
-            border-right: 1px solid var(--ap-border) !important;
-          }
-
-          /* Reduce motion for accessibility */
-          @media (prefers-reduced-motion: reduce){
-            *{
-              animation: none !important;
-              transition: none !important;
-              scroll-behavior: auto !important;
-            }
-            div.stButton > button[kind="primary"]:hover{
-              transform: none !important;
-            }
-          }
-
-          /*
-            NOTE: Streamlit doesn’t expose per-option styling for radio inputs in a robust way.
-            I avoided semantic colors for scores so low ratings don’t read as “error”.
-          */
         </style>
-        """,
-        unsafe_allow_html=True,
-    )
+    """, unsafe_allow_html=True)
 
 
-# =============================================================================
-# State + helper functions
-# =============================================================================
 
-def init_state() -> None:
-    """
-    Session state makes the multi-page experience stable and prevents losing inputs.
-
-    I’m also intentionally not forcing “perfect defaults” for service ratings:
-    the progress bar should reflect real completion, not pre-filled values.
-    """
-    defaults: Dict[str, Any] = {
-        # Passenger & flight context
-        "gender": None,
-        "customer_type": None,
-        "age": None,
-        "type_of_travel": None,
-        "class": None,
-        "flight_distance": None,
-        "departure_delay": 0,
-        "arrival_delay": 0,
-
-        # Service ratings (CSAT 1–5 + 0 for N/A). None means “not answered yet”.
+def init_state():
+    defaults = {
+        "gender": None, "customer_type": None, "age": 30, "type_of_travel": None,
+        "class": None, "flight_distance": 1000, "departure_delay": 0, "arrival_delay": 0,
         "ratings": {key: None for block in SERVICE_BLOCKS.values() for key, _, _ in block["items"]},
-
-        # Navigation (default into Service Ratings because that’s the core signal)
-        "nav": "Service Ratings",
+        "nav": "Evaluación"
     }
-
     for k, v in defaults.items():
         if k not in st.session_state:
             st.session_state[k] = v
 
-
-def csat_input(key: str, label: str, help_text: str) -> Optional[int]:
-    """
-    Likert-style CSAT input with an explicit N/A option.
-    Returns:
-      - 1..5 for a real rating
-      - 0 for “Not applicable”
-      - None if the user hasn’t selected anything yet
-    """
+def render_csat_input(key, label, help_text):
     st.markdown(f"**{label}**")
-    st.markdown(f"<div class='ap-microcopy'>{help_text}</div>", unsafe_allow_html=True)
-
+    val = st.session_state["ratings"].get(key)
     options = [None, 0, 1, 2, 3, 4, 5]
-    option_labels = {
-        None: "Select…",
-        0: "N/A",
-        1: "1",
-        2: "2",
-        3: "3",
-        4: "4",
-        5: "5",
-    }
-
-    current = st.session_state["ratings"].get(key, None)
-
+    
     selected = st.radio(
-        label="",
+        label=help_text,
         options=options,
-        index=options.index(current) if current in options else 0,
+        index=options.index(val) if val in options else 0,
         horizontal=True,
         key=f"radio_{key}",
-        format_func=lambda x: option_labels.get(x, str(x)),
-        label_visibility="collapsed",
+        format_func=lambda x: "N/A" if x == 0 else ("Seleccione..." if x is None else str(x)),
+        label_visibility="collapsed"
     )
+    
+    if selected is not None:
+        st.session_state["ratings"][key] = selected
 
-    if selected is None:
-        st.caption("Rate from 1 (very dissatisfied) to 5 (very satisfied). Use N/A if the service was not used.")
-        st.session_state["ratings"][key] = None
-        return None
-
-    st.caption(f"Selected: **{option_labels[selected]}** — {CSAT_LABELS.get(selected, '')}")
-    st.session_state["ratings"][key] = selected
-    return selected
-
-
-def compute_live_csat(ratings: Dict[str, Optional[int]]) -> Tuple[Optional[float], int, int]:
-    """
-    Live average CSAT:
-      - averages only rated values (1..5)
-      - excludes 0 (N/A) and None (not answered)
-    """
-    values = [v for v in ratings.values() if isinstance(v, int) and v in (1, 2, 3, 4, 5)]
-    avg = round(sum(values) / len(values), 2) if values else None
-    return avg, len(values), len(ratings)
-
-
-def compute_progress() -> int:
-    """
-    Completion logic:
-      - Passenger profile fields are “done” if filled
-      - Each rating counts as “done” if it’s answered (including N/A)
-
-    This gives a realistic completion indicator and helps reduce form drop-off.
-    """
-    passenger_fields = ["gender", "customer_type", "age", "type_of_travel", "class", "flight_distance"]
-    passenger_done = sum(1 for f in passenger_fields if st.session_state.get(f) not in (None, ""))
-
-    ratings = st.session_state["ratings"]
-    ratings_done = sum(1 for v in ratings.values() if v is not None)  # includes 0 = N/A
-
-    total = len(passenger_fields) + len(ratings)
-    done = passenger_done + ratings_done
-    pct = int(round((done / total) * 100)) if total else 0
-    return min(max(pct, 0), 100)
-
-
-def validate_inputs() -> Tuple[bool, str]:
-    """
-    Friendly validation with a CX/ops tone.
-    I’m validating only what’s needed to run a reliable prediction.
-    """
-    required_fields = {
-        "Gender": st.session_state.get("gender"),
-        "Customer type": st.session_state.get("customer_type"),
-        "Age": st.session_state.get("age"),
-        "Type of travel": st.session_state.get("type_of_travel"),
-        "Class": st.session_state.get("class"),
-        "Flight distance": st.session_state.get("flight_distance"),
+def get_passenger_data() -> pd.DataFrame:
+    ui_map = {
+        "Mujer": "Female", "Hombre": "Male",
+        "Cliente Leal": "Loyal Customer", "Cliente Desleal": "Disloyal Customer",
+        "Viaje de negocios": "Business travel", "Viaje personal": "Personal travel",
+        "Business": "Business", "Eco": "Eco", "Eco Plus": "Eco Plus" 
     }
 
-    missing = [name for name, val in required_fields.items() if val in (None, "")]
-    if missing:
-        return (
-            False,
-            "Please complete the passenger profile first: "
-            + ", ".join(missing)
-            + ". This helps the model give a more reliable prediction.",
-        )
-
-    # Soft requirement: we don’t need every single attribute rated, but we do need some signal.
-    avg, rated_count, _ = compute_live_csat(st.session_state["ratings"])
-    if rated_count == 0:
-        return (
-            False,
-            "To run a prediction, please rate at least one service attribute (or set it to N/A). "
-            "Service ratings are the strongest signal for satisfaction forecasting.",
-        )
-
-    # Simple numeric sanity checks
-    age = st.session_state.get("age")
-    if age is not None and (age < 0 or age > 120):
-        return (False, "Age looks out of range. Please enter a valid passenger age.")
-
-    dist = st.session_state.get("flight_distance")
-    if dist is not None and dist < 0:
-        return (False, "Flight distance can’t be negative. Please check the value and try again.")
-
-    return (True, "")
-
-
-def build_input_dataframe() -> pd.DataFrame:
-    """
-    Creates a single-row DataFrame aligned to the dataset-style column names.
-
-    NOTE: column names may need to be adjusted once the final pipeline expects
-    snake_case vs original dataset labels. I’m keeping a clear mapping here so it’s easy to swap.
-    """
-    row: Dict[str, Any] = {
-        "Gender": st.session_state["gender"],
-        "Customer Type": st.session_state["customer_type"],
+    row = {
+        "Gender": ui_map.get(st.session_state["gender"]),
+        "Customer Type": ui_map.get(st.session_state["customer_type"]),
         "Age": st.session_state["age"],
-        "Type of Travel": st.session_state["type_of_travel"],
-        "Class": st.session_state["class"],
-        "Flight distance": st.session_state["flight_distance"],
+        "Type of Travel": ui_map.get(st.session_state["type_of_travel"]),
+        "Class": ui_map.get(st.session_state["class"]),
+        "Flight Distance": st.session_state["flight_distance"],
         "Departure Delay in Minutes": st.session_state["departure_delay"],
         "Arrival Delay in Minutes": st.session_state["arrival_delay"],
     }
 
-    # Map UI keys -> dataset-like column names
     ui_to_dataset = {
         "inflight_wifi_service": "Inflight wifi service",
         "ease_of_online_booking": "Ease of Online booking",
         "online_boarding": "Online boarding",
         "departure_arrival_time_convenient": "Departure/Arrival time convenient",
         "gate_location": "Gate location",
-        "checkin_service": "Check-in service",
+        "checkin_service": "Checkin service",
         "baggage_handling": "Baggage handling",
         "seat_comfort": "Seat comfort",
         "leg_room_service": "Leg room service",
@@ -500,318 +165,151 @@ def build_input_dataframe() -> pd.DataFrame:
         "inflight_service": "Inflight service",
     }
 
-    for ui_key, ds_key in ui_to_dataset.items():
-        row[ds_key] = st.session_state["ratings"].get(ui_key)
+    for ui, ds in ui_to_dataset.items():
+        val = st.session_state["ratings"].get(ui)
+        row[ds] = val if val is not None else 3 # Default neutral if missing
 
     return pd.DataFrame([row])
 
 
-def reset_all() -> None:
-    """
-    Clears current inputs and starts a new scenario.
-    (Useful for CX managers when they want to compare “what-if” cases quickly.)
-    """
-    for k in list(st.session_state.keys()):
-        del st.session_state[k]
-    st.rerun()
 
 
-# =============================================================================
-# UI sections (split so we can iterate without breaking everything)
-# =============================================================================
+def render_sidebar():
+    # Logo
+    try:
+        logo_path = os.path.join(project_root, "assets", "logo.svg")
+        if os.path.exists(logo_path):
+            st.sidebar.image(logo_path, use_container_width=True)
+    except Exception:
+        pass
 
-def render_header() -> None:
-    left, right = st.columns([3, 1])
-    with left:
-        st.markdown(
-            f"## ✈️ {APP_NAME} <span class='ap-badge'>{MODEL_BADGE}</span>",
-            unsafe_allow_html=True,
-        )
-        st.caption("Passenger Satisfaction Predictor — CX Tool")
-        st.info(
-            "Fill this form to simulate a passenger experience and predict satisfaction level. "
-            "Your ratings are used to forecast satisfaction and highlight improvement opportunities."
-        )
-    with right:
-        st.metric(label="Form completion", value=f"{compute_progress()}%")
-        st.progress(compute_progress() / 100.0)
-
-
-def render_sidebar() -> None:
-    st.sidebar.markdown(f"### {APP_NAME}")
-    st.sidebar.caption("Operational CX forecasting for airline teams")
-
-    nav = st.sidebar.radio(
-        "Navigation",
-        options=["Flight Inputs", "Service Ratings", "Prediction Result", "Model Info"],
-        index=["Flight Inputs", "Service Ratings", "Prediction Result", "Model Info"].index(st.session_state["nav"]),
-    )
+    # nav radio
+    st.sidebar.caption(f"Modelo {MODEL_VERSION}")
+    
+    opts = ["Datos Vuelo", "Evaluación", "Resultados"]
+    nav = st.sidebar.radio("Navegación", opts, index=opts.index(st.session_state.get("nav", "Evaluación")) if st.session_state.get("nav") in opts else 1)
     st.session_state["nav"] = nav
-
+    
     st.sidebar.divider()
-    st.sidebar.caption("Tip: Use **N/A** when the service was not used. It won’t lower the CSAT average.")
+    if st.sidebar.button("Reiniciar"):
+        st.session_state.clear()
+        st.rerun()
 
-
-def render_flight_inputs() -> None:
-    st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='ap-card-title'>Passenger Profile</div>", unsafe_allow_html=True)
-    st.markdown("<div class='ap-card-subtitle'>Passenger and flight context data.</div>", unsafe_allow_html=True)
-
+def render_flight_data():
+    st.markdown("<div class='ap-card'><div class='ap-card-title'>Perfil del Pasajero</div>", unsafe_allow_html=True)
     c1, c2 = st.columns(2)
-
+    
     with c1:
-        st.session_state["gender"] = st.radio(
-            "Gender",
-            options=["Female", "Male"],
-            index=0 if st.session_state["gender"] is None else ["Female", "Male"].index(st.session_state["gender"]),
-            horizontal=True,
-        )
-        st.session_state["age"] = st.number_input(
-            "Age",
-            min_value=0,
-            max_value=120,
-            value=st.session_state["age"] if st.session_state["age"] is not None else 30,
-            help="Passenger age in years.",
-        )
-        st.session_state["class"] = st.selectbox(
-            "Class",
-            options=["Business", "Eco", "Eco Plus"],
-            index=0 if st.session_state["class"] is None else ["Business", "Eco", "Eco Plus"].index(st.session_state["class"]),
-            help="Travel class for this trip.",
-        )
-        st.session_state["departure_delay"] = st.number_input(
-            "Departure Delay (minutes)",
-            min_value=0,
-            value=int(st.session_state["departure_delay"] or 0),
-            help="Minutes delayed at departure.",
-        )
+        st.session_state["gender"] = st.radio("Género", ["Mujer", "Hombre"], horizontal=True, index=["Mujer", "Hombre"].index(st.session_state["gender"]) if st.session_state["gender"] else 0)
+        st.session_state["age"] = st.number_input("Edad", 0, 100, st.session_state["age"])
+        st.session_state["class"] = st.selectbox("Clase", ["Business", "Eco", "Eco Plus"], index=["Business", "Eco", "Eco Plus"].index(st.session_state["class"]) if st.session_state["class"] else 0)
+        st.session_state["departure_delay"] = st.number_input("Retraso Salida (min)", 0, value=st.session_state["departure_delay"])
 
     with c2:
-        st.session_state["customer_type"] = st.selectbox(
-            "Customer type",
-            options=["Loyal Customer", "Disloyal Customer"],
-            index=0 if st.session_state["customer_type"] is None else ["Loyal Customer", "Disloyal Customer"].index(st.session_state["customer_type"]),
-            help="Customer relationship status.",
-        )
-        st.session_state["type_of_travel"] = st.radio(
-            "Type of travel",
-            options=["Business travel", "Personal travel"],
-            index=0 if st.session_state["type_of_travel"] is None else ["Business travel", "Personal travel"].index(st.session_state["type_of_travel"]),
-            horizontal=True,
-        )
-        st.session_state["flight_distance"] = st.number_input(
-            "Flight distance",
-            min_value=0,
-            value=int(st.session_state["flight_distance"] or 1000),
-            help="Total flight distance (unit aligned with the dataset used in modeling).",
-        )
-        st.session_state["arrival_delay"] = st.number_input(
-            "Arrival Delay (minutes)",
-            min_value=0,
-            value=int(st.session_state["arrival_delay"] or 0),
-            help="Minutes delayed at arrival.",
-        )
-
+        st.session_state["customer_type"] = st.selectbox("Tipo Cliente", ["Cliente Leal", "Cliente Desleal"], index=["Cliente Leal", "Cliente Desleal"].index(st.session_state["customer_type"]) if st.session_state["customer_type"] else 0)
+        st.session_state["type_of_travel"] = st.radio("Motivo Viaje", ["Viaje de negocios", "Viaje personal"], horizontal=True, index=["Viaje de negocios", "Viaje personal"].index(st.session_state["type_of_travel"]) if st.session_state["type_of_travel"] else 0)
+        st.session_state["flight_distance"] = st.number_input("Distancia", 0, value=st.session_state["flight_distance"])
+        st.session_state["arrival_delay"] = st.number_input("Retraso Llegada (min)", 0, value=st.session_state["arrival_delay"])
+    
     st.markdown("</div>", unsafe_allow_html=True)
+    
+    if st.button("Siguiente: Evaluación de Servicio", type="primary"):
+        st.session_state["nav"] = "Evaluación"
+        st.rerun()
 
+def render_evaluation():
+    st.markdown("<div class='ap-card'><div class='ap-card-title'>Evaluación de Servicio</div>", unsafe_allow_html=True)
+    
+    done = sum(1 for v in st.session_state["ratings"].values() if v is not None)
+    total = len(st.session_state["ratings"])
+    st.progress(done/total)
+    st.caption(f"{done}/{total} completados")
 
-def render_service_ratings() -> None:
-    avg, rated_count, total_items = compute_live_csat(st.session_state["ratings"])
-
-    st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='ap-card-title'>Service Quality Ratings</div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='ap-card-subtitle'>Rate expected service quality. These ratings feed the satisfaction prediction.</div>",
-        unsafe_allow_html=True,
-    )
-
-    if avg is None:
-        st.metric(
-            "Average service score (live)",
-            "—",
-            help="Calculated from rated items only (1–5). N/A is excluded.",
-        )
-    else:
-        st.metric(
-            "Average service score (live)",
-            f"{avg} / 5",
-            help="Calculated from rated items only (1–5). N/A is excluded.",
-        )
-
-    st.caption(f"Rated items: {rated_count} of {total_items}. You can set any attribute to N/A if it does not apply.")
-    st.markdown("</div>", unsafe_allow_html=True)
-
-    # Accordion pattern to reduce fatigue on long forms (works great with Streamlit expanders)
-    for section_title, section in SERVICE_BLOCKS.items():
-        with st.expander(f"{section_title} — {section['description']}", expanded=False):
-            st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
-            st.markdown(f"<div class='ap-card-title'>{section_title}</div>", unsafe_allow_html=True)
-            st.markdown(f"<div class='ap-card-subtitle'>{section['description']}</div>", unsafe_allow_html=True)
-
-            for key, label, help_text in section["items"]:
-                csat_input(key, label, help_text)
+    for section, data in SERVICE_BLOCKS.items():
+        with st.expander(section, expanded=False):
+            for k, l, h in data["items"]:
+                render_csat_input(k, l, h)
                 st.divider()
-
-            st.markdown("</div>", unsafe_allow_html=True)
-
-
-def render_prediction_result() -> None:
-    st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='ap-card-title'>Prediction Result</div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='ap-card-subtitle'>Model output and key drivers. Use this to prioritize CX improvements.</div>",
-        unsafe_allow_html=True,
-    )
-
-    valid, msg = validate_inputs()
-    if not valid:
-        st.warning(msg)
-        st.markdown("</div>", unsafe_allow_html=True)
-        return
-
-    # Build input row (encoding/scaling/missing handling happens in the pipeline)
-    X_input = build_input_dataframe()
-
-    try:
-        # NOTE: This is the integration point.
-        # When the modeling team finalizes the pipeline, we’ll align:
-        #   - expected feature names
-        #   - missing value treatment (0 -> N/A, None -> missing)
-        #   - return format (label + proba + drivers)
-        result = predict(X_input)
-
-        # For now I handle both:
-        #  - a dict contract (recommended)
-        #  - a simple label (fallback)
-        if isinstance(result, dict):
-            pred = result.get("prediction", "—")
-            conf = result.get("confidence", None)  # expected 0..1
-            csat_avg = result.get("average_csat", None)
-            drivers = result.get("top_drivers", [])
-        else:
-            pred = str(result)
-            conf = None
-            csat_avg, _, _ = compute_live_csat(st.session_state["ratings"])
-            drivers = []
-
-        c1, c2, c3 = st.columns([1.2, 1.0, 1.2])
-        with c1:
-            st.metric("Prediction", pred)
-        with c2:
-            if conf is None:
-                st.metric("Confidence", "—")
-            else:
-                st.metric("Confidence", f"{int(round(conf * 100))}%")
-                st.progress(min(max(conf, 0.0), 1.0))
-        with c3:
-            if csat_avg is None:
-                st.metric("Average CSAT", "—")
-            else:
-                st.metric("Average CSAT", f"{csat_avg} / 5")
-
-        st.divider()
-        st.subheader("Top drivers (explainability)")
-        if drivers:
-            for d in drivers[:5]:
-                st.write(f"• {d}")
-        else:
-            st.caption(
-                "Driver insights will show up here once the pipeline exposes feature importance / SHAP outputs. "
-                "UI is already prepared for it."
-            )
-
-        st.success("Prediction generated. You can tweak ratings to test different scenarios.")
-
-    except Exception:
-        # NOTE: Keeping the error message user-friendly.
-        # The technical traceback can be added later to logs if we want.
-        st.error(
-            "We couldn’t generate a prediction with the current configuration. "
-            "Please try again, or check that the model pipeline is connected and running."
-        )
-
     st.markdown("</div>", unsafe_allow_html=True)
 
+    c1, c2 = st.columns([1, 1])
+    with c1:
+        if st.button("Atrás"):
+            st.session_state["nav"] = "Datos Vuelo"
+            st.rerun()
+    with c2:
+        if st.button("Ejecutar Predicción", type="primary"):
+            st.session_state["nav"] = "Resultados"
+            st.rerun()
 
-def render_model_info() -> None:
-    st.markdown("<div class='ap-card'>", unsafe_allow_html=True)
-    st.markdown("<div class='ap-card-title'>Model Info</div>", unsafe_allow_html=True)
-    st.markdown(
-        "<div class='ap-card-subtitle'>Placeholders for model documentation. I’ll update this once the final model is integrated.</div>",
-        unsafe_allow_html=True,
-    )
-
-    st.write("**What this tool does**")
-    st.write("- Predicts passenger satisfaction before closing a flight record.")
-    st.write("- Highlights which service attributes are pushing satisfaction up or down (once explainability is wired).")
-
-    st.write("**CSAT handling**")
-    st.write("- Ratings use a 1–5 Likert scale (Very dissatisfied → Very satisfied).")
-    st.write("- **0 is treated as Not applicable / Not used** (not a low score).")
-
-    st.write("**Operational notes**")
-    st.write("- For best results, rate the attributes most relevant to the passenger journey.")
-    st.write("- Use N/A when an attribute does not apply, rather than forcing a score.")
+def render_results():
+    st.markdown("<div class='ap-card'><div class='ap-card-title'>Predicción</div>", unsafe_allow_html=True)
+    
+    # Auto-run prediction on load
+    with st.spinner("Analizando datos..."):
+        try:
+            data = get_passenger_data()
+            result = predict_satisfaction(data)
+            
+            c1, c2 = st.columns(2)
+            pred = result.get("prediction", "Error")
+            prob = result.get("probability_satisfied", 0.0)
+            
+            with c1:
+                color = "green" if pred == "satisfied" else "red"
+                text = "Satisfecho" if pred == "satisfied" else "Insatisfecho/Neutral"
+                st.markdown(f"<h2 style='color: {color};'>{text}</h2>", unsafe_allow_html=True)
+            
+            with c2:
+                st.metric("Probabilidad Satisfacción", f"{prob:.1%}")
+                st.progress(prob)
+            
+            # Save to Database
+            if pred != "Error":
+                try:
+                    insert_prediction(
+                        input_data=data.to_dict(orient='records')[0],
+                        prediction_text=pred,
+                        prob_satisfied=prob,
+                        prob_dissatisfied=result.get("probability_dissatisfied", 0.0)
+                    )
+                except Exception as db_e:
+                    logger.error(f"Failed to save to DB: {db_e}")
+            
+        except Exception as e:
+            st.error(f"Error en predicción: {str(e)}")
+            logger.error(e)
 
     st.markdown("</div>", unsafe_allow_html=True)
-
-
-def render_actions() -> None:
-    """
-    CTA hierarchy:
-      - Run prediction = primary (high emphasis)
-      - Reset = secondary link style (doesn’t compete)
-    """
-    st.divider()
-
-    left, right = st.columns([1, 1])
-
-    with left:
-        run = st.button("Run prediction", type="primary", use_container_width=True)
-        st.caption("Your inputs will be used to predict passenger satisfaction.")
-
-    with right:
-        st.markdown("<div class='ap-link-btn'>", unsafe_allow_html=True)
-        reset = st.button("Reset inputs", use_container_width=False)
-        st.markdown("</div>", unsafe_allow_html=True)
-        st.caption("Clears all fields and starts a new scenario.")
-
-    if reset:
-        reset_all()
-
-    # When the user clicks “Run prediction”, we take them straight to the Result page.
-    if run:
-        st.session_state["nav"] = "Prediction Result"
+    
+    if st.button("Reiniciar Formulario"):
+        st.session_state.clear()
         st.rerun()
 
 
-# =============================================================================
-# Main
-# =============================================================================
-
-def main() -> None:
-    st.set_page_config(page_title=f"{APP_NAME} G4", page_icon="✈️", layout="wide")
+def main():
+    st.set_page_config(page_title=APP_NAME, layout="centered")
     inject_css()
     init_state()
-
     render_sidebar()
-    render_header()
 
-    if st.session_state["nav"] == "Flight Inputs":
-        render_flight_inputs()
-        render_actions()
+    # Main content
+    # Banner
+    try:
+        banner_path = os.path.join(project_root, "assets", "banner.svg")
+        if os.path.exists(banner_path):
+             st.image(banner_path, use_container_width=True)
+    except Exception:
+        pass
 
-    elif st.session_state["nav"] == "Service Ratings":
-        render_service_ratings()
-        render_actions()
+    nav = st.session_state["nav"]
 
-    elif st.session_state["nav"] == "Prediction Result":
-        render_prediction_result()
-        render_actions()
-
-    elif st.session_state["nav"] == "Model Info":
-        render_model_info()
-
+    if nav == "Datos Vuelo":
+        render_flight_data()
+    elif nav == "Evaluación":
+        render_evaluation()
+    elif nav == "Resultados":
+        render_results()
 
 if __name__ == "__main__":
     main()
