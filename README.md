@@ -147,9 +147,9 @@ Resultados obtenidos por el modelo final (**Optuna Optimized**):
 
 | Integrante | Rol | Contacto |
 | :--- | :--- | :--- |
-| **Rocio Lozano Caro** | Data Scientist / Lead Developer | [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/rociolozanocaro/) [![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)](https://github.com/rociolozanocaro) |
-| **Thamirys Kearney** | Data Analyst / ML Engineer | [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/thamirys-kearney-0a7a7331/) [![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)](https://github.com/ThamirysKearney) |
-| **Mariana Moreno** | Data Analyst / QA | [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/mariana-moreno-henao/) |
+| **Rocio Lozano Caro** | Data Analyst | [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/rociolozanocaro/) [![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)](https://github.com/rociolozanocaro) |
+| **Thamirys Kearney** | Product Owner | [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/thamirys-kearney-0a7a7331/) [![GitHub](https://img.shields.io/badge/GitHub-181717?style=flat&logo=github&logoColor=white)](https://github.com/ThamirysKearney) |
+| **Mariana Moreno** | Scrum Master | [![LinkedIn](https://img.shields.io/badge/LinkedIn-0077B5?style=flat&logo=linkedin&logoColor=white)](https://www.linkedin.com/in/mariana-moreno-henao/) |
 
 ---
 *Este proyecto es parte del Bootcamp Data Analyst y ha sido diseñado bajo estándares de calidad profesional.*
