@@ -1,4 +1,7 @@
+<<<<<<< HEAD
 <?xml version="1.0" encoding="UTF-8"?>
+=======
+>>>>>>> 6ec98c195defdefe5924c9be2f738c1b9f104a00
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 300" preserveAspectRatio="xMidYMid slice">
   <defs>
     <linearGradient id="skyGrad" x1="0%" y1="0%" x2="100%" y2="0%">
