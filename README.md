@@ -1,6 +1,6 @@
 ![Airline Predict Banner](assets/banner.svg)
 
-# Airline Predict G4 ✈️
+# Airline Predict G4 
 
 Proyecto de Machine Learning para la clasificación de la satisfacción de pasajeros utilizando el **Airline Passenger Satisfaction Dataset**. Implementa un pipeline completo desde el Análisis Exploratorio de Datos (EDA) hasta el despliegue de una aplicación interactiva en contenedores.
 
