@@ -154,5 +154,5 @@ Resultados obtenidos por el modelo final (**Optuna Optimized**):
 ---
 <p align="center">
   <b>Factoría F5</b><br>
-  <i>Proyecto diseñado para el <b>Bootcamp Data Analyst</b> bajo estándares de calidad profesional.</i>
+  <i>Proyecto diseñado para el <b>Bootcamp Data Analyst</b>.</i>
 </p>
