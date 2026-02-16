@@ -23,7 +23,7 @@ Thumbs.db
 
 # Models and data (optional)
 *.pkl
-*.joblib
+# *.joblib
 *.h5
 *.model
 
